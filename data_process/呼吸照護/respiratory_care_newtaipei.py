@@ -4,8 +4,6 @@ import re
 df = pd.read_csv('respiratory_care_newtaipei.csv')
 
 # 1️清空tel (電話)
-if 'tel' in df.columns:
-    df['tel'] = ''
 
 if 'twd97y' in df.columns:
     df['twd97y'] = ''

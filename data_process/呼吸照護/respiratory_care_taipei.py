@@ -3,8 +3,6 @@ import re
 
 df = pd.read_csv('respiratory_care_taipei.csv', index_col=False, encoding='utf-8-sig')
 
-if '電話' in df.columns:
-    df['電話'] = ''
 
 df = df.drop_duplicates()
 
