@@ -1,10 +1,10 @@
 import csv
 
 # 你要處理的 CSV 路徑
-csv_file_path = 'Renewable-Energy-in-Taipei-City.csv'
+csv_file_path = 'The location of a hospital/The location of a hospital.csv'
 
 # 輸出 SQL 的文字檔（可選）
-output_file_path = 'output.sql'
+output_file_path = 'The location of a hospital.sql'
 
 rows = []
 
