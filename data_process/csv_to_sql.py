@@ -1,10 +1,10 @@
 import csv
 
 # 你要處理的 source
-csv_file_path = './死亡機率/死亡機率_整合.csv'
+csv_file_path = './Causes of Death/Causes_of_Death_Data_TP.csv'
 
 # 輸出 SQL 的文字檔（可選）
-output_file_path = './死亡機率/死亡機率_整合.sql'
+output_file_path = './Causes of Death/Causes_of_Death_Data_TP.sql'
 
 rows = []
 
