@@ -6,7 +6,7 @@ INSERT INTO public.component_charts (index, color, types, unit)
 VALUES (
 		'cancer_statistics',
 		'{#4B96FA,#E15F99}',
-		'{PopulationPyramid,ColumnChart,BarChart}',
+		'{ColumnChart,BarChart}',
 		'人'
 	);
 -- 步驟 3：新增台北癌症統計資料表
@@ -95,21 +95,22 @@ VALUES (
 		1,
 		'year',
 		'衛生福利部統計處',
-		'雙北市癌症統計資料',
-		'顯示台北市與新北市歷年癌症發生率統計，包含不同性別、癌症類型的發生數據，數據來源為衛福部癌症登記資料庫。',
-		'可用於了解雙北地區癌症發生趨勢，支援公共衛生政策制定與癌症防治規劃。',
+		'台北市癌症統計資料',
+		'顯示台北市歷年癌症發生率統計，包含不同癌症類型的發生數據，數據來源為衛福部癌症登記資料庫。',
+		'可用於了解台北市癌症發生趨勢，支援公共衛生政策制定與癌症防治規劃。',
 		'{https://www.hpa.gov.tw/Pages/List.aspx?nodeid=119}',
 		'{doit}',
-		'2025-05-31 05:19:25',
-		'2025-05-31 05:19:25',
-		'three_d',
+		'2025-01-20 10:00:00',
+		'2025-01-20 10:00:00',
+		'two_d',
 		$$
 		SELECT cancer_type AS x_axis,
-			diagnosis_year AS y_axis,
-			cancer_cases AS data
+			SUM(cancer_cases) AS data
 		FROM public.cancer_statistics_taipei
-		ORDER BY x_axis,
-			y_axis;
+		WHERE diagnosis_year = '2022年'
+			AND cancer_type != '全癌症'
+		GROUP BY cancer_type
+		ORDER BY SUM(cancer_cases) DESC;
 $$,
 NULL,
 'taipei'
@@ -147,26 +148,22 @@ VALUES (
 		1,
 		'year',
 		'衛生福利部統計處',
-		'雙北市癌症統計資料',
-		'顯示台北市與新北市歷年癌症發生率統計，包含不同性別、癌症類型的發生數據，數據來源為衛福部癌症登記資料庫。',
-		'可用於了解雙北地區癌症發生趨勢，支援公共衛生政策制定與癌症防治規劃。',
+		'新北市癌症統計資料',
+		'顯示新北市歷年癌症發生率統計，包含不同癌症類型的發生數據，數據來源為衛福部癌症登記資料庫。',
+		'可用於了解新北市癌症發生趨勢，支援公共衛生政策制定與癌症防治規劃。',
 		'{https://www.hpa.gov.tw/Pages/List.aspx?nodeid=119}',
 		'{doit}',
-		'2025-05-31 05:19:25',
-		'2025-05-31 05:19:25',
-		'three_d',
+		'2025-01-20 10:00:00',
+		'2025-01-20 10:00:00',
+		'two_d',
 		$$
 		SELECT cancer_type AS x_axis,
-			diagnosis_year AS y_axis,
-			cancer_cases AS data
-		FROM public.cancer_statistics_taipei
-		UNION ALL
-		SELECT cancer_type AS x_axis,
-			diagnosis_year AS y_axis,
-			cancer_cases AS data
+			SUM(cancer_cases) AS data
 		FROM public.cancer_statistics_newtaipei
-		ORDER BY x_axis,
-			y_axis;
+		WHERE diagnosis_year = '2022年'
+			AND cancer_type != '全癌症'
+		GROUP BY cancer_type
+		ORDER BY SUM(cancer_cases) DESC;
 $$,
 NULL,
 'metrotaipei'
