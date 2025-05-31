@@ -101,7 +101,7 @@ INSERT INTO public.query_charts (
   NULL,
   0,
   NULL,
-  '衛生福利部統計處《醫療機構病床數統計》',
+  '衛生福利部統計處',
   '臺北市各行政區病床總數',
   '依年份與行政區呈現臺北市病床總數，數據來自衛福部《醫療機構病床數統計》，反映醫療資源分布。',
   '可用於瞭解各行政區醫療資源配置情形，支援政策規劃與民眾查詢。',
@@ -118,5 +118,7 @@ FROM bed_count_taipei
 WHERE year IS NOT NULL
 ORDER BY year, district_name; $$,
   NULL,
-  '臺北市'
+  'taipei' -- 台北市 一樣要記得新北也要放上去
 );
+
+
