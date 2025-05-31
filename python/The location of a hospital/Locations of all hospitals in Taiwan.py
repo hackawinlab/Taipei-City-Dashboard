@@ -1,6 +1,13 @@
 import pandas as pd
 
-df = pd.read_excel("Locations of all hospitals in Taiwan.ods", engine="odf")
+# 讀取 .ods 檔案
+df = pd.read_excel('Locations of all hospitals in Taiwan.ods', engine='odf')
 
-cities = df
-print(cities)
+# 資料塞選
+df = df[["機構名稱", "縣市區名", "地址"]]
+print(df)
+
+df = df[df["縣市區名"].str[:3].isin(["臺北市", "新北市"])]
+df["縣市區名"] = df["縣市區名"].str[3:]
+
+df.to_csv("The Location of a hospital.csv", index=False, encoding="utf-8-sig")
