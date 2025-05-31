@@ -4,7 +4,7 @@ import pandas as pd
 df = pd.read_excel('Locations of all hospitals in Taiwan.ods', engine='odf')
 
 # 資料塞選
-df = df[["機構名稱", "縣市區名", "地址"]]
+df = df[["機構名稱", "縣市區名", "地址","電話"]]
 df["地址"] = df["地址"].str.replace(r"(號).*", r"\1", regex=True)
 
 print(df)
