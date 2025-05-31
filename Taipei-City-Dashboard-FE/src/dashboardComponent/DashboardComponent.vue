@@ -30,6 +30,7 @@ import IconPercentChart from "./components/IconPercentChart.vue";
 import IndicatorChart from "./components/IndicatorChart.vue";
 import TextUnitChart from "./components/TextUnitChart.vue";
 import PopulationPyramid from "./components/PopulationPyramid.vue";
+import ScatterChart from "./components/ScatterChart.vue";
 
 import MapLegendSvg from "./assets/chart/MapLegend.svg";
 import DistrictChartSvg from "./assets/chart/DistrictChart.svg";
@@ -52,6 +53,7 @@ import TreemapChartSvg from "./assets/chart/TreemapChart.svg";
 import IndicatorChartSvg from "./assets/chart/IndicatorChart.svg";
 import TextUnitChartSvg from "./assets/chart/TextUnitChart.svg";
 import PopulationPyramidSvg from "./assets/chart/PopulationPyramid.svg";
+import ScatterChartSvg from "./assets/chart/ScatterChart.svg";
 
 const props = defineProps({
 	style: { type: Object, default: () => ({}) },
@@ -227,6 +229,8 @@ function returnChartComponent(name, svg) {
 			return svg ? PopulationPyramidSvg : PopulationPyramid;
 		case "NegativeLineChart":
 			return svg ? NegativeLineChartSvg : NegativeLineChart;
+		case "ScatterChart":
+			return svg ? ScatterChartSvg : ScatterChart;
 		default:
 			return svg ? MapLegendSvg : MapLegend;
 	}

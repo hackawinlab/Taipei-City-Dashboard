@@ -27,7 +27,8 @@ const chartOptions = ref({
 			show: false,
 		},
 		zoom: {
-			enabled: false,
+			enabled: true,
+			type: "xy",
 		},
 	},
 	colors: [...props.chart_config.color],
@@ -35,45 +36,52 @@ const chartOptions = ref({
 		enabled: false,
 	},
 	grid: {
-		show: false,
+		show: true,
+		borderColor: "#444",
+		strokeDashArray: 3,
+		xaxis: {
+			lines: {
+				show: true,
+			},
+		},
+		yaxis: {
+			lines: {
+				show: true,
+			},
+		},
 	},
 	legend: {
 		show: props.series.length > 1 ? true : false,
 	},
 	markers: {
+		size: 6,
+		strokeWidth: 2,
+		strokeColors: ["#282a2c"],
 		hover: {
-			size: 5,
+			size: 8,
 		},
-		size: 3,
-		strokeWidth: 0,
 	},
 	stroke: {
-		colors: [...props.chart_config.color],
-		curve: "smooth",
-		show: true,
-		width: 2,
+		show: false,
 	},
 	tooltip: {
 		// The class "chart-tooltip" could be edited in /assets/styles/chartStyles.css
-		custom: function ({ series, seriesIndex, dataPointIndex, w }) {
-			const value = series[seriesIndex][dataPointIndex];
-			const isNegative = value < 0;
-
+		custom: function ({ seriesIndex, dataPointIndex, w }) {
+			const dataPoint = w.config.series[seriesIndex].data[dataPointIndex];
 			return (
 				'<div class="chart-tooltip">' +
 				"<h6>" +
-				w.globals.labels[dataPointIndex] +
 				`${
 					props.series.length > 1
-						? "-" + w.globals.seriesNames[seriesIndex]
-						: ""
+						? w.globals.seriesNames[seriesIndex]
+						: "數據點"
 				}` +
 				"</h6>" +
-				"<span" +
-				(isNegative ? ' style="color: #ff6b6b;"' : "") +
-				">" +
-				value +
-				` ${props.chart_config.unit}` +
+				"<span>" +
+				`X: ${dataPoint.x}` +
+				"</span><br>" +
+				"<span>" +
+				`Y: ${dataPoint.y} ${props.chart_config.unit}` +
 				"</span>" +
 				"</div>"
 			);
@@ -81,59 +89,40 @@ const chartOptions = ref({
 		followCursor: true,
 	},
 	xaxis: {
-		axisBorder: {
-			color: "#555",
-			height: "0.8",
-		},
-		axisTicks: {
-			show: false,
-		},
-		categories: props.chart_config.categories
-			? props.chart_config.categories
-			: [],
-		crosshairs: {
-			show: false,
-		},
-		labels: {
-			datetimeUTC: false,
-		},
-		type: props.chart_config.categories ? "category" : "datetime",
-	},
-	yaxis: {
-		labels: {
-			formatter: function (val) {
-				return val.toFixed(0);
-			},
-		},
+		type: "numeric",
 		title: {
-			text: props.chart_config.unit || "",
+			text: "X軸",
 			style: {
 				color: "var(--color-complement-text)",
 			},
 		},
-	},
-	annotations: {
-		yaxis: [
-			{
-				y: 0,
-				borderColor: "var(--color-complement-text)",
-				borderWidth: 1,
-				strokeDashArray: 3,
-				opacity: 0.7,
-				label: {
-					borderColor: "var(--color-complement-text)",
-					style: {
-						color: "var(--color-complement-text)",
-						background: "var(--color-component-background)",
-						fontSize: "10px",
-					},
-					text: "基準線 (0)",
-					position: "left",
-					offsetX: 0,
-					offsetY: 0,
-				},
+		labels: {
+			style: {
+				colors: "var(--color-complement-text)",
 			},
-		],
+		},
+		axisBorder: {
+			color: "#555",
+		},
+		axisTicks: {
+			color: "#555",
+		},
+	},
+	yaxis: {
+		title: {
+			text: props.chart_config.unit || "Y軸",
+			style: {
+				color: "var(--color-complement-text)",
+			},
+		},
+		labels: {
+			style: {
+				colors: "var(--color-complement-text)",
+			},
+			formatter: function (val) {
+				return val.toFixed(1);
+			},
+		},
 	},
 });
 
@@ -148,21 +137,25 @@ function handleDataSelection(_e, _chartContext, config) {
 	) {
 		// Supports filtering by xAxis + yAxis
 		if (props.map_filter.mode === "byParam") {
+			const dataPoint =
+				config.w.config.series[config.seriesIndex].data[
+					config.dataPointIndex
+				];
 			emits(
 				"filterByParam",
 				props.map_filter,
 				props.map_config,
-				config.w.globals.labels[config.dataPointIndex],
+				dataPoint.x,
 				config.w.globals.seriesNames[config.seriesIndex]
 			);
 		}
 		// Supports filtering by xAxis
 		else if (props.map_filter.mode === "byLayer") {
-			emits(
-				"filterByLayer",
-				props.map_config,
-				config.w.globals.labels[config.dataPointIndex]
-			);
+			const dataPoint =
+				config.w.config.series[config.seriesIndex].data[
+					config.dataPointIndex
+				];
+			emits("filterByLayer", props.map_config, dataPoint.x);
 		}
 		selectedIndex.value = `${config.dataPointIndex}-${config.seriesIndex}`;
 	} else {
@@ -177,14 +170,14 @@ function handleDataSelection(_e, _chartContext, config) {
 </script>
 
 <template>
-  <div v-if="activeChart === 'NegativeLineChart'">
-    <VueApexCharts
-      width="100%"
-      height="260px"
-      type="line"
-      :options="chartOptions"
-      :series="series"
-      @data-point-selection="handleDataSelection"
-    />
-  </div>
+	<div v-if="activeChart === 'ScatterChart'">
+		<VueApexCharts
+			width="100%"
+			height="260px"
+			type="scatter"
+			:options="chartOptions"
+			:series="series"
+			@data-point-selection="handleDataSelection"
+		/>
+	</div>
 </template>

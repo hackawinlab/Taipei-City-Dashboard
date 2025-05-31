@@ -20,6 +20,7 @@ export const chartTypes = {
 	MapLegend: "地圖圖例",
 	TextUnitChart: "文字單位圖",
 	PopulationPyramid: "人口金字塔圖",
+	ScatterChart: "散點圖",
 };
 
 export const chartsPerDataType = {
@@ -51,5 +52,6 @@ export const chartsPerDataType = {
 		"BarChartWithGoal",
 		"IconPercentChart",
 	],
+	scatter: ["ScatterChart"],
 	map_legend: ["MapLegend"],
 };
