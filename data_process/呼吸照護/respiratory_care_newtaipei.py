@@ -7,6 +7,10 @@ df = pd.read_csv('respiratory_care_newtaipei.csv')
 if 'tel' in df.columns:
     df['tel'] = ''
 
+if 'twd97y' in df.columns:
+    df['twd97y'] = ''
+if 'twd97x' in df.columns:
+    df['twd97x'] = ''
 df = df.drop_duplicates()
 
 df["hosp_addr"] = df["hosp_addr"].str.replace(r"(號).*", r"\1", regex=True)
