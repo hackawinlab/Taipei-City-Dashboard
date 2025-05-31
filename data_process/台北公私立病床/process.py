@@ -47,19 +47,33 @@ def filter_taipei_areas(df, area_mapping):
     """篩選出台北市和新北市的資料，並移除城市名稱前綴"""
     # 篩選台北市和新北市的區域代碼
     taipei_codes = []
+    new_taipei_codes = []
+    
     for code, name in area_mapping.items():
-        if name.startswith('臺北市') or name.startswith('新北市'):
+        if name.startswith('臺北市'):
             taipei_codes.append(code)
+        elif name.startswith('新北市'):
+            new_taipei_codes.append(code)
     
-    # 篩選資料
-    filtered_df = df[df['鄉鎮市區碼'].isin(taipei_codes)].copy()
+    # 篩選台北市資料
+    taipei_df = df[df['鄉鎮市區碼'].isin(taipei_codes)].copy()
+    taipei_df['區域名稱'] = taipei_df['鄉鎮市區碼'].map(
+        lambda x: area_mapping[x].replace('臺北市', '') if x in area_mapping else ''
+    )
     
-    # 新增區域名稱欄位（移除城市前綴）
-    filtered_df['區域名稱'] = filtered_df['鄉鎮市區碼'].map(
+    # 篩選新北市資料
+    new_taipei_df = df[df['鄉鎮市區碼'].isin(new_taipei_codes)].copy()
+    new_taipei_df['區域名稱'] = new_taipei_df['鄉鎮市區碼'].map(
+        lambda x: area_mapping[x].replace('新北市', '') if x in area_mapping else ''
+    )
+    
+    # 合併雙北資料
+    combined_df = pd.concat([taipei_df, new_taipei_df], ignore_index=True)
+    combined_df['區域名稱'] = combined_df['鄉鎮市區碼'].map(
         lambda x: area_mapping[x].replace('臺北市', '').replace('新北市', '') if x in area_mapping else ''
     )
     
-    return filtered_df
+    return taipei_df, combined_df
 
 def process_year_data(year_folder):
     """處理單一年份的資料"""
@@ -91,11 +105,40 @@ def process_year_data(year_folder):
             print(f"  錯誤: 無法讀取檔案 {csv_files[0]}: {e}")
             return None
     
-    # 從資料夾名稱提取年份
+    # 從資料夾名稱提取年份並格式化為"111年"格式
     year = os.path.basename(year_folder).replace('年醫院病床統計', '')
-    df['年份'] = year
+    df['年份'] = f"{year}年"
     
     return df
+
+def save_data(df, filename, description):
+    """儲存資料並顯示統計資訊"""
+    if df.empty:
+        print(f"警告: {description}沒有資料")
+        return
+    
+    # 重新排列欄位順序
+    base_cols = ['年份', '鄉鎮市區碼', '區域名稱']
+    cols = base_cols + [col for col in df.columns if col not in base_cols]
+    df = df[cols]
+    
+    # 按年份和區域代碼排序
+    df = df.sort_values(['年份', '鄉鎮市區碼']).reset_index(drop=True)
+    
+    # 儲存檔案
+    df.to_csv(filename, index=False, encoding='utf-8-sig')
+    
+    print(f"\n{description}:")
+    print(f"  檔案: {filename}")
+    print(f"  資料筆數: {len(df)}")
+    print(f"  涵蓋年份: {sorted(df['年份'].unique())}")
+    print(f"  涵蓋區域: {sorted(df['區域名稱'].unique())}")
+    
+    # 顯示各年份資料筆數
+    year_counts = df['年份'].value_counts().sort_index()
+    print(f"  各年份資料筆數:")
+    for year, count in year_counts.items():
+        print(f"    {year}: {count} 筆")
 
 def main():
     """主要處理函數"""
@@ -111,7 +154,8 @@ def main():
     
     print(f"找到 {len(year_folders)} 個年份資料夾")
     
-    all_data = []
+    taipei_data = []
+    combined_data = []
     
     # 處理每個年份的資料
     for folder in year_folders:
@@ -119,50 +163,34 @@ def main():
         year_data = process_year_data(folder)
         
         if year_data is not None:
-            # 篩選台北市和新北市資料
-            filtered_data = filter_taipei_areas(year_data, area_mapping)
+            # 篩選台北市和雙北資料
+            filtered_taipei, filtered_combined = filter_taipei_areas(year_data, area_mapping)
             
-            if not filtered_data.empty:
-                all_data.append(filtered_data)
-                print(f"  - 篩選出 {len(filtered_data)} 筆資料")
+            if not filtered_taipei.empty:
+                taipei_data.append(filtered_taipei)
+                combined_data.append(filtered_combined)
+                print(f"  - 台北市: {len(filtered_taipei)} 筆")
+                print(f"  - 雙北合併: {len(filtered_combined)} 筆")
             else:
-                print(f"  - 警告: 沒有找到台北市或新北市的資料")
+                print(f"  - 警告: 沒有找到台北市的資料")
     
-    if not all_data:
+    if not taipei_data:
         print("錯誤: 沒有找到任何有效資料")
         return
     
     # 合併所有年份資料
-    print("合併所有年份資料...")
-    combined_df = pd.concat(all_data, ignore_index=True)
+    print("\n合併所有年份資料...")
+    combined_taipei_df = pd.concat(taipei_data, ignore_index=True) if taipei_data else pd.DataFrame()
+    combined_all_df = pd.concat(combined_data, ignore_index=True) if combined_data else pd.DataFrame()
     
-    # 重新排列欄位順序，將年份和區域名稱放在前面
-    cols = ['年份', '鄉鎮市區碼', '區域名稱'] + [col for col in combined_df.columns if col not in ['年份', '鄉鎮市區碼', '區域名稱']]
-    combined_df = combined_df[cols]
+    # 儲存兩個檔案
+    save_data(combined_taipei_df, "台北市醫院病床統計.csv", "台北市資料")
+    save_data(combined_all_df, "雙北醫院病床統計_合併資料.csv", "雙北合併資料")
     
-    # 按年份和區域代碼排序
-    combined_df = combined_df.sort_values(['年份', '鄉鎮市區碼']).reset_index(drop=True)
-    
-    # 儲存結果
-    output_file = "台北新北醫院病床統計_合併資料.csv"
-    combined_df.to_csv(output_file, index=False, encoding='utf-8-sig')
-    
-    print(f"處理完成！")
-    print(f"總共處理了 {len(combined_df)} 筆資料")
-    print(f"涵蓋年份: {sorted(combined_df['年份'].unique())}")
-    print(f"涵蓋區域: {sorted(combined_df['區域名稱'].unique())}")
-    print(f"結果已儲存至: {output_file}")
-    
-    # 顯示資料摘要
-    print("\n資料摘要:")
-    print(f"欄位數量: {len(combined_df.columns)}")
-    print(f"主要欄位: {list(combined_df.columns[:10])}")
-    
-    # 顯示各年份資料筆數
-    print("\n各年份資料筆數:")
-    year_counts = combined_df['年份'].value_counts().sort_index()
-    for year, count in year_counts.items():
-        print(f"  {year}年: {count} 筆")
+    print(f"\n處理完成！")
+    print(f"已生成兩個檔案:")
+    print(f"  1. 台北市醫院病床統計.csv (僅台北市)")
+    print(f"  2. 雙北醫院病床統計_合併資料.csv (台北市+新北市)")
 
 if __name__ == "__main__":
     main()
