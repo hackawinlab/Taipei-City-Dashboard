@@ -1,0 +1,22 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+	<title>負值折線圖</title>
+	<style>
+		.s0 { fill: none;stroke: #000000;stroke-linecap: round;stroke-linejoin: round;stroke-width: 22 } 
+		.s1 { fill: none;stroke: #ff6b6b;stroke-linecap: round;stroke-linejoin: round;stroke-width: 22 } 
+		.s2 { fill: none;stroke: #888;stroke-width: 4 } 
+	</style>
+	<g id="負值折線圖">
+		<!-- X and Y axes -->
+		<line class="s2" x1="100" y1="100" x2="100" y2="900"/>
+		<line class="s2" x1="100" y1="500" x2="900" y2="500"/>
+		
+		<!-- Positive line (above zero) -->
+		<path class="s0" d="m150 300l150 -100 150 50 150 -150 150 100"/>
+		
+		<!-- Negative line (below zero) -->
+		<path class="s1" d="m150 700l150 100 150 -50 150 150 150 -100"/>
+		
+		<!-- Zero line indicator -->
+		<line class="s2" x1="80" y1="500" x2="120" y2="500" stroke-width="8"/>
+	</g>
+</svg> 

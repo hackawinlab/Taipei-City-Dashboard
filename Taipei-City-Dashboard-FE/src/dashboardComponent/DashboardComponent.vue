@@ -19,6 +19,7 @@ import GuageChart from "./components/GuageChart.vue";
 import RadarChart from "./components/RadarChart.vue";
 import TimelineSeparateChart from "./components/TimelineSeparateChart.vue";
 import TimelineStackedChart from "./components/TimelineStackedChart.vue";
+import NegativeLineChart from "./components/NegativeLineChart.vue";
 import MapLegend from "./components/MapLegend.vue";
 import MetroChart from "./components/MetroChart.vue";
 import HeatmapChart from "./components/HeatmapChart.vue";
@@ -45,6 +46,7 @@ import MetroChartSvg from "./assets/chart/MetroChart.svg";
 import PolarAreaChartSvg from "./assets/chart/PolarAreaChart.svg";
 import RadarChartSvg from "./assets/chart/RadarChart.svg";
 import TimelineSeparateChartSvg from "./assets/chart/TimelineSeparateChart.svg";
+import NegativeLineChartSvg from "./assets/chart/NegativeLineChart.svg";
 import BarChartWithGoalSvg from "./assets/chart/BarChartWithGoal.svg";
 import TreemapChartSvg from "./assets/chart/TreemapChart.svg";
 import IndicatorChartSvg from "./assets/chart/IndicatorChart.svg";
@@ -223,6 +225,8 @@ function returnChartComponent(name, svg) {
 			return svg ? TextUnitChartSvg : TextUnitChart;
 		case "PopulationPyramid":
 			return svg ? PopulationPyramidSvg : PopulationPyramid;
+		case "NegativeLineChart":
+			return svg ? NegativeLineChartSvg : NegativeLineChart;
 		default:
 			return svg ? MapLegendSvg : MapLegend;
 	}
