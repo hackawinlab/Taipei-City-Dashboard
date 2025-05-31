@@ -1,0 +1,1 @@
+INSERT INTO public.component_maps (id, index, title, type, source, size, icon, paint, property) VALUES (333, 'aed_location', 'AED Map', 'symbol', 'geojson', null, 'medical_services', '{}', '[{"key":"name","name":"場所名稱"},{"key":"address","name":"地址"}]');
