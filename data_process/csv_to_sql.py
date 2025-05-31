@@ -1,10 +1,10 @@
 import csv
 
 # 你要處理的 source
-csv_file_path = './癌症統計/processed_cancer_data.csv'
+csv_file_path = './乳房檢查人數/taipei_breast_screening_data.csv'
 
 # 輸出 SQL 的文字檔（可選）
-output_file_path = './癌症統計/processed_cancer_data_taipei.sql'
+output_file_path = './乳房檢查人數/taipei_breast_screening_data.sql'
 
 rows = []
 
