@@ -8,28 +8,4 @@ create table breathing_hospital_location
     city     text
 );
 
-INSERT INTO breating_hospital_location (city, district, name, address, lng, lat) VALUES
-('新北市', '板橋區', '醫療財團法人徐元智先生醫藥基金會亞東紀念醫院', '新北市板橋區南雅南路2段21號', 121.452311, 24.997313),
-('新北市', '板橋區', '中英醫療社團法人中英醫院', '新北市板橋區文化路一段196號', 121.466262, 25.019884),
-('新北市', '板橋區', '中英醫療社團法人板英醫院', '新北市板橋區文化路1段267、269、271號', 121.464638, 25.018516),
-('新北市', '板橋區', '板橋國泰醫院', '新北市板橋區忠孝路5、7、9、11號', 121.460085, 25.001955),
-('新北市', '板橋區', '蕭中正醫院', '新北市板橋區南雅南路一段15號', 121.456472, 25.006972),
-('新北市', '三重區', '宏仁醫院', '新北市三重區水漾路一段158號', 121.48378, 25.053965),
-('新北市', '三重區', '三重中興醫院', '新北市三重區中興北街21號', 121.46966, 25.046535),
-('新北市', '永和區', '永和復康醫院', '新北市永和區中和路575．577．579號', 121.512036, 25.003936),
-('新北市', '中和區', '怡和醫院', '新北市中和區連城路49號', 121.498506, 25.001882),
-('新北市', '中和區', '祥顥醫院', '新北市新莊區思源路2號', 121.460834, 25.038661),
-('臺北市', '中正區', '國立台灣大學醫學院附設醫院', '臺北市中正區中山南路7、8號', 121.517564, 25.04536),
-('臺北市', '大同區', '臺北市立聯合醫院', '臺北市大同區鄭州路145號', 121.508885, 25.050693),
-('臺北市', '松山區', '三軍總醫院松山分院附設民眾診療服務處', '臺北市松山區健康路131號', 121.557702, 25.05394),
-('臺北市', '松山區', '博仁綜合醫院', '臺北市松山區光復北路66號', 121.560387, 25.049959),
-('臺北市', '大安區', '秀傳醫院', '臺北市大安區光復南路116巷1、3、5號', 121.55571, 25.03982),
-('臺北市', '萬華區', '同仁院醫療財團法人萬華醫院', '臺北市萬華區中華路二段606巷6號', 121.509823, 25.024051),
-('臺北市', '信義區', '臺北醫學大學附設醫院', '臺北市信義區吳興街252號', 121.563635, 25.026639),
-('臺北市', '士林區', '新光醫療財團法人新光吳火獅紀念醫院', '臺北市士林區文昌路95號', 121.520986, 25.09625),
-('臺北市', '北投區', '臺北榮民總醫院', '臺北市北投區石牌路二段201號', 121.522479, 25.120637),
-('臺北市', '北投區', '臺北市立關渡醫院─委託臺北榮民總醫院經營', '臺北市北投區知行路二二五巷12號', 121.467085, 25.120272),
-('臺北市', '內湖區', '三軍總醫院附設民眾診療服務處', '臺北市內湖區成功路二段325號', 121.591979, 25.071802),
-('臺北市', '內湖區', '康寧醫療財團法人康寧醫院', '臺北市內湖區成功路五段420巷26號', 121.608779, 25.075952),
-('臺北市', '文山區', '景美醫院', '臺北市文山區羅斯福路六段280號', 121.53983, 24.991089),
-('臺北市', '大安區', '國泰醫療財團法人國泰綜合醫院', '臺北市大安區仁愛路四段266巷6號', 121.552799, 25.037179);
+INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('板橋區', '醫療財團法人徐元智先生醫藥基金會亞東紀念醫院', '新北市板橋區南雅南路2段21號', 121.452311, 24.997313, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('板橋區', '中英醫療社團法人中英醫院', '新北市板橋區文化路一段196號', 121.466262, 25.019884, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('板橋區', '中英醫療社團法人板英醫院', '新北市板橋區文化路1段267、269、271號', 121.464638, 25.018516, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('板橋區', '板橋國泰醫院', '新北市板橋區忠孝路5、7、9、11號', 121.460085, 25.001955, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('板橋區', '蕭中正醫院', '新北市板橋區南雅南路一段15號', 121.456472, 25.006972, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('三重區', '宏仁醫院', '新北市三重區水漾路一段158號', 121.48378, 25.053965, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('三重區', '三重中興醫院', '新北市三重區中興北街21號', 121.46966, 25.046535, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('永和區', '永和復康醫院', '新北市永和區中和路575．577．579號', 121.512036, 25.003936, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('中和區', '怡和醫院', '新北市中和區連城路49號', 121.498506, 25.001882, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('中和區', '祥顥醫院', '新北市新莊區思源路2號', 121.460834, 25.038661, '新北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('中正區', '國立台灣大學醫學院附設醫院', '臺北市中正區中山南路7、8號', 121.517564, 25.04536, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('大同區', '臺北市立聯合醫院', '臺北市大同區鄭州路145號', 121.508885, 25.050693, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('松山區', '三軍總醫院松山分院附設民眾診療服務處', '臺北市松山區健康路131號', 121.557702, 25.05394, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('松山區', '博仁綜合醫院', '臺北市松山區光復北路66號', 121.560387, 25.049959, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('大安區', '秀傳醫院', '臺北市大安區光復南路116巷1、3、5號', 121.55571, 25.03982, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('萬華區', '同仁院醫療財團法人萬華醫院', '臺北市萬華區中華路二段606巷6號', 121.509823, 25.024051, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('信義區', '臺北醫學大學附設醫院', '臺北市信義區吳興街252號', 121.563635, 25.026639, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('士林區', '新光醫療財團法人新光吳火獅紀念醫院', '臺北市士林區文昌路95號', 121.520986, 25.09625, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('北投區', '臺北榮民總醫院', '臺北市北投區石牌路二段201號', 121.522479, 25.120637, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('北投區', '臺北市立關渡醫院─委託臺北榮民總醫院經營', '臺北市北投區知行路二二五巷12號', 121.467085, 25.120272, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('內湖區', '三軍總醫院附設民眾診療服務處', '臺北市內湖區成功路二段325號', 121.591979, 25.071802, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('內湖區', '康寧醫療財團法人康寧醫院', '臺北市內湖區成功路五段420巷26號', 121.608779, 25.075952, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('文山區', '景美醫院', '臺北市文山區羅斯福路六段280號', 121.53983, 24.991089, '臺北市');INSERT INTO public.breathing_hospital_location (district, name, address, lng, lat, city) VALUES ('大安區', '國泰醫療財團法人國泰綜合醫院', '臺北市大安區仁愛路四段266巷6號', 121.552799, 25.037179, '臺北市');
