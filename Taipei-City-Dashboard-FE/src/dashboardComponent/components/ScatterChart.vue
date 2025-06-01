@@ -170,14 +170,14 @@ function handleDataSelection(_e, _chartContext, config) {
 </script>
 
 <template>
-	<div v-if="activeChart === 'ScatterChart'">
-		<VueApexCharts
-			width="100%"
-			height="260px"
-			type="scatter"
-			:options="chartOptions"
-			:series="series"
-			@data-point-selection="handleDataSelection"
-		/>
-	</div>
+  <div v-if="activeChart === 'ScatterChart'">
+    <VueApexCharts
+      width="100%"
+      height="260px"
+      type="scatter"
+      :options="chartOptions"
+      :series="series"
+      @data-point-selection="handleDataSelection"
+    />
+  </div>
 </template>
