@@ -83,6 +83,13 @@ func GetComponentChartData(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "success", "data": chartData})
+	} else if queryType == "bubble" {
+		chartData, err := models.GetBubbleData(&queryString, timeFrom, timeTo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "success", "data": chartData})
 	} else if queryType == "map_legend" {
 		chartData, err := models.GetMapLegendData(&queryString, timeFrom, timeTo)
 		if err != nil {

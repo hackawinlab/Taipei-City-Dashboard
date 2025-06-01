@@ -26,4 +26,5 @@ export const chartTypes: chartType = {
 	TextUnitChart: "文字數值圖", // V
 	PopulationPyramid: "人口金字塔圖", // V
 	ScatterChart: "散點圖", // V
+	BubbleChart: "泡泡圖", // V
 };

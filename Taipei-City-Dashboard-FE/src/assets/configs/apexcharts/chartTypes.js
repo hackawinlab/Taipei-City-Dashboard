@@ -21,6 +21,7 @@ export const chartTypes = {
 	TextUnitChart: "文字單位圖",
 	PopulationPyramid: "人口金字塔圖",
 	ScatterChart: "散點圖",
+	BubbleChart: "泡泡圖",
 };
 
 export const chartsPerDataType = {
@@ -53,5 +54,6 @@ export const chartsPerDataType = {
 		"IconPercentChart",
 	],
 	scatter: ["ScatterChart"],
+	bubble: ["BubbleChart"],
 	map_legend: ["MapLegend"],
 };
