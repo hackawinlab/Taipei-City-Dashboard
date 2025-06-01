@@ -208,14 +208,14 @@ function parseTime(time) {
 </script>
 
 <template>
-	<div v-if="activeChart === 'AreaChart'">
-		<VueApexCharts
-			width="100%"
-			height="260px"
-			type="area"
-			:options="chartOptions"
-			:series="series"
-			@data-point-selection="handleDataSelection"
-		/>
-	</div>
+  <div v-if="activeChart === 'AreaChart'">
+    <VueApexCharts
+      width="100%"
+      height="260px"
+      type="area"
+      :options="chartOptions"
+      :series="series"
+      @data-point-selection="handleDataSelection"
+    />
+  </div>
 </template>
