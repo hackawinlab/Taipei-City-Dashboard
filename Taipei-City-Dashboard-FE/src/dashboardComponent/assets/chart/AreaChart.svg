@@ -1,0 +1,38 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+	<title>AreaChart Icon</title>
+	<defs>
+		<linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+			<stop offset="0%" style="stop-color:#5a9cf8;stop-opacity:0.8" />
+			<stop offset="100%" style="stop-color:#5a9cf8;stop-opacity:0.2" />
+		</linearGradient>
+	</defs>
+	<style>
+		.area-path { fill: url(#areaGradient); stroke: #5a9cf8; stroke-width: 3; }
+		.axis { stroke: #888787; stroke-width: 2; }
+		.grid { stroke: #444; stroke-width: 1; stroke-dasharray: 5,5; opacity: 0.5; }
+	</style>
+	<g id="AreaChart">
+		<!-- Grid lines -->
+		<line class="grid" x1="150" y1="200" x2="850" y2="200"/>
+		<line class="grid" x1="150" y1="350" x2="850" y2="350"/>
+		<line class="grid" x1="150" y1="500" x2="850" y2="500"/>
+		<line class="grid" x1="150" y1="650" x2="850" y2="650"/>
+		
+		<!-- Axes -->
+		<line class="axis" x1="150" y1="150" x2="150" y2="700"/>
+		<line class="axis" x1="150" y1="700" x2="850" y2="700"/>
+		
+		<!-- Area chart path -->
+		<path class="area-path" d="M 150 650 L 250 500 L 350 400 L 450 300 L 550 450 L 650 250 L 750 350 L 850 200 L 850 700 L 150 700 Z"/>
+		
+		<!-- Data points -->
+		<circle cx="150" cy="650" r="4" fill="#5a9cf8"/>
+		<circle cx="250" cy="500" r="4" fill="#5a9cf8"/>
+		<circle cx="350" cy="400" r="4" fill="#5a9cf8"/>
+		<circle cx="450" cy="300" r="4" fill="#5a9cf8"/>
+		<circle cx="550" cy="450" r="4" fill="#5a9cf8"/>
+		<circle cx="650" cy="250" r="4" fill="#5a9cf8"/>
+		<circle cx="750" cy="350" r="4" fill="#5a9cf8"/>
+		<circle cx="850" cy="200" r="4" fill="#5a9cf8"/>
+	</g>
+</svg> 

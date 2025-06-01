@@ -32,6 +32,7 @@ import TextUnitChart from "./components/TextUnitChart.vue";
 import PopulationPyramid from "./components/PopulationPyramid.vue";
 import ScatterChart from "./components/ScatterChart.vue";
 import BubbleChart from "./components/BubbleChart.vue";
+import AreaChart from "./components/AreaChart.vue";
 
 import MapLegendSvg from "./assets/chart/MapLegend.svg";
 import DistrictChartSvg from "./assets/chart/DistrictChart.svg";
@@ -56,6 +57,7 @@ import TextUnitChartSvg from "./assets/chart/TextUnitChart.svg";
 import PopulationPyramidSvg from "./assets/chart/PopulationPyramid.svg";
 import ScatterChartSvg from "./assets/chart/ScatterChart.svg";
 import BubbleChartSvg from "./assets/chart/BubbleChart.svg";
+import AreaChartSvg from "./assets/chart/AreaChart.svg";
 
 const props = defineProps({
 	style: { type: Object, default: () => ({}) },
@@ -235,6 +237,8 @@ function returnChartComponent(name, svg) {
 			return svg ? ScatterChartSvg : ScatterChart;
 		case "BubbleChart":
 			return svg ? BubbleChartSvg : BubbleChart;
+		case "AreaChart":
+			return svg ? AreaChartSvg : AreaChart;
 		default:
 			return svg ? MapLegendSvg : MapLegend;
 	}

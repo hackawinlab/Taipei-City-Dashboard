@@ -27,4 +27,5 @@ export const chartTypes: chartType = {
 	PopulationPyramid: "人口金字塔圖", // V
 	ScatterChart: "散點圖", // V
 	BubbleChart: "泡泡圖", // V
+	AreaChart: "面積圖", // V
 };
