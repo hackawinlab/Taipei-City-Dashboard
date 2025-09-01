@@ -19,6 +19,7 @@ import GuageChart from "./components/GuageChart.vue";
 import RadarChart from "./components/RadarChart.vue";
 import TimelineSeparateChart from "./components/TimelineSeparateChart.vue";
 import TimelineStackedChart from "./components/TimelineStackedChart.vue";
+import NegativeLineChart from "./components/NegativeLineChart.vue";
 import MapLegend from "./components/MapLegend.vue";
 import MetroChart from "./components/MetroChart.vue";
 import HeatmapChart from "./components/HeatmapChart.vue";
@@ -28,6 +29,10 @@ import BarChartWithGoal from "./components/BarChartWithGoal.vue";
 import IconPercentChart from "./components/IconPercentChart.vue";
 import IndicatorChart from "./components/IndicatorChart.vue";
 import TextUnitChart from "./components/TextUnitChart.vue";
+import PopulationPyramid from "./components/PopulationPyramid.vue";
+import ScatterChart from "./components/ScatterChart.vue";
+import BubbleChart from "./components/BubbleChart.vue";
+import AreaChart from "./components/AreaChart.vue";
 
 import MapLegendSvg from "./assets/chart/MapLegend.svg";
 import DistrictChartSvg from "./assets/chart/DistrictChart.svg";
@@ -44,11 +49,15 @@ import MetroChartSvg from "./assets/chart/MetroChart.svg";
 import PolarAreaChartSvg from "./assets/chart/PolarAreaChart.svg";
 import RadarChartSvg from "./assets/chart/RadarChart.svg";
 import TimelineSeparateChartSvg from "./assets/chart/TimelineSeparateChart.svg";
+import NegativeLineChartSvg from "./assets/chart/NegativeLineChart.svg";
 import BarChartWithGoalSvg from "./assets/chart/BarChartWithGoal.svg";
 import TreemapChartSvg from "./assets/chart/TreemapChart.svg";
 import IndicatorChartSvg from "./assets/chart/IndicatorChart.svg";
 import TextUnitChartSvg from "./assets/chart/TextUnitChart.svg";
-
+import PopulationPyramidSvg from "./assets/chart/PopulationPyramid.svg";
+import ScatterChartSvg from "./assets/chart/ScatterChart.svg";
+import BubbleChartSvg from "./assets/chart/BubbleChart.svg";
+import AreaChartSvg from "./assets/chart/AreaChart.svg";
 
 const props = defineProps({
 	style: { type: Object, default: () => ({}) },
@@ -63,8 +72,8 @@ const props = defineProps({
 	config: { type: Object, required: true },
 	selectBtn: { type: Boolean, default: false },
 	selectBtnDisabled: { type: Boolean, default: false },
-	selectBtnList: { type: Array, default: () => ([])  },
-	cityTag: { type: Array, default: () => ([]) },
+	selectBtnList: { type: Array, default: () => [] },
+	cityTag: { type: Array, default: () => [] },
 	favoriteBtn: { type: Boolean, default: false },
 	isFavorite: { type: Boolean, default: false },
 	deleteBtn: { type: Boolean, default: false },
@@ -73,7 +82,7 @@ const props = defineProps({
 	infoBtnText: { type: String, default: "組件資訊" },
 	toggleDisable: { type: Boolean, default: false },
 	footer: { type: Boolean, default: true },
-	activeCity: { type: String, default: '' },
+	activeCity: { type: String, default: "" },
 	toggleOn: { type: Boolean, default: false },
 });
 
@@ -88,7 +97,7 @@ const emits = defineEmits([
 	"clearByParamFilter",
 	"clearByLayerFilter",
 	"fly",
-	"changeCity"
+	"changeCity",
 ]);
 
 const activeChart = ref(props.config.chart_config.types[0]);
@@ -220,6 +229,16 @@ function returnChartComponent(name, svg) {
 		return svg ? IndicatorChartSvg : IndicatorChart;
 	case "TextUnitChart":
 		return svg ? TextUnitChartSvg : TextUnitChart;
+	case "PopulationPyramid":
+		return svg ? PopulationPyramidSvg : PopulationPyramid;
+	case "NegativeLineChart":
+		return svg ? NegativeLineChartSvg : NegativeLineChart;
+	case "ScatterChart":
+		return svg ? ScatterChartSvg : ScatterChart;
+	case "BubbleChart":
+		return svg ? BubbleChartSvg : BubbleChart;
+	case "AreaChart":
+		return svg ? AreaChartSvg : AreaChart;
 	default:
 		return svg ? MapLegendSvg : MapLegend;
 	}
@@ -261,7 +280,9 @@ function returnChartComponent(name, svg) {
           >
             <span v-if="config.map_filter && config.map_config">tune</span>
             <span v-if="config.map_config && config.map_config[0]">map</span>
-            <span v-if="config.history_config?.range">insights</span>
+            <span v-if="config.history_config?.range">
+              insights
+            </span>
           </div>
         </h3>
         <p v-if="mode === 'preview'">
@@ -276,12 +297,12 @@ function returnChartComponent(name, svg) {
           <h4 v-else>
             {{ `${config.source} | ${dataTime}` }}
           </h4>
-          <div
+          <div 
             v-if="mode !== 'preview'"
             class="city-tag-container"
           >
             <ComponentTag
-              v-for=" city in props.cityTag"
+              v-for="city in props.cityTag"
               :key="city"
               :icon="''"
               :text="city.name"
@@ -335,10 +356,7 @@ function returnChartComponent(name, svg) {
     </div>
     <!-- Control Buttons -->
     <div
-      v-if="
-        (!mode.includes('map') || toggleOn) &&
-          mode !== 'preview'
-      "
+      v-if="(!mode.includes('map') || toggleOn) && mode !== 'preview'"
       class="dashboardcomponent-control"
     >
       <select
@@ -346,10 +364,10 @@ function returnChartComponent(name, svg) {
         v-model="activeCity"
         name="city"
         class="selectBtn"
-        :class="{'selectBtn-disabled': selectBtnDisabled}"
+        :class="{ 'selectBtn-disabled': selectBtnDisabled }"
       >
-        <template
-          v-for="city in props.selectBtnList"
+        <template 
+          v-for="city in props.selectBtnList" 
           :key="city.value"
         >
           <option :value="city.value">
@@ -366,7 +384,8 @@ function returnChartComponent(name, svg) {
           :key="`${config.index}-${item}-button`"
           :class="{
             'dashboardcomponent-control-group-button': true,
-            'dashboardcomponent-control-group-active': activeChart === item,
+            'dashboardcomponent-control-group-active':
+              activeChart === item,
           }"
           @click="changeActiveChart(item)"
         >
@@ -375,13 +394,11 @@ function returnChartComponent(name, svg) {
       </div>
     </div>
     <!-- Main Content -->
-    <div
-      v-if="mode === 'preview'"
+    <div 
+      v-if="mode === 'preview'" 
       class="preview-content"
     >
-      <div
-        class="preview-content-id"
-      >
+      <div class="preview-content-id">
         <div
           v-if="mode === 'preview'"
           class="city-tag-container-preview"
@@ -485,7 +502,12 @@ function returnChartComponent(name, svg) {
           class="hide-if-mobile"
         />
         <ComponentTag
-          v-if="config.map_config && config.map_config[0] !== null && config.map_config?.length > 0"
+          v-if="
+            config.map_config &&
+              config.map_config[0] !== null &&
+              config.map_config?.length > 0 &&
+              mode !== 'preview'
+          "
           :icon="mode === 'preview' ? '' : 'map'"
           text="空間資料"
           class="hide-if-mobile"
@@ -498,8 +520,8 @@ function returnChartComponent(name, svg) {
         />
       </div>
       <div v-else />
-      <button
-        v-if="infoBtn"
+      <button 
+        v-if="infoBtn" 
         @click="$emit('info', config)"
       >
         <p>{{ infoBtnText }}</p>
@@ -641,10 +663,7 @@ button:hover {
 			button span {
 				color: var(--color-complement-text);
 				font-family: var(--font-icon);
-				font-size: calc(
-					var(--font-l) *
-						var(--font-to-icon)
-				);
+				font-size: calc(var(--font-l) * var(--font-to-icon));
 				transition: color 0.2s;
 
 				&:hover {
@@ -715,13 +734,13 @@ button:hover {
 				text-align: center;
 				transition: color 0.2s, opacity 0.2s;
 				user-select: none;
-	
+
 				&:hover {
 					opacity: 1;
 					color: white;
 				}
 			}
-	
+
 			&-active {
 				background-color: var(--color-complement-text);
 				color: white;
@@ -938,9 +957,7 @@ button:hover {
 				width: 40px;
 				height: 40px;
 				border-radius: 5px;
-				background-color: var(
-					--color-complement-text
-				);
+				background-color: var(--color-complement-text);
 			}
 		}
 	}
@@ -952,7 +969,7 @@ button:hover {
 			margin: 4px 0;
 			display: flex;
 			gap: 5px;
-	
+
 			div:first-child {
 				margin-left: 5px;
 			}

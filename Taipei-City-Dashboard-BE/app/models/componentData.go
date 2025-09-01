@@ -112,6 +112,71 @@ type MapLegendData struct {
 	Value float64 `gorm:"column:value" json:"value"`
 }
 
+/*
+ScatterData Json Format:
+
+	{
+		"data": [
+			{
+				"name": "",
+				"data": [
+					{ "x": 2.5, "y": 65 },
+					...
+				]
+			},
+			...
+		]
+	}
+*/
+type ScatterData struct {
+	Xaxis float64 `gorm:"column:x_axis"`
+	Yaxis string  `gorm:"column:y_axis"`
+	Data  float64 `gorm:"column:data"`
+}
+
+type ScatterDataItem struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type ScatterDataOutput struct {
+	Name string             `json:"name"`
+	Data []ScatterDataItem `json:"data"`
+}
+
+/*
+Bubble Json Format:
+[
+	{
+		"name": "series1",
+		"data": [
+			{
+				"x": 1,
+				"y": 2,
+				"z": 3
+			}
+		]
+	}
+]
+*/
+type BubbleData struct {
+	Xaxis float64 `gorm:"column:x_axis"`
+	Yaxis string  `gorm:"column:y_axis"`
+	Data  float64 `gorm:"column:data"`
+	Size  float64 `gorm:"column:size"`
+}
+
+type BubbleDataItem struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+}
+
+type BubbleDataOutput struct {
+	Name string            `json:"name"`
+	Data []BubbleDataItem `json:"data"`
+}
+
 /* ----- Handlers ----- */
 
 func GetComponentChartDataQuery(id int, city string) (queryType string, queryString string, err error) {
@@ -344,4 +409,88 @@ func GetMapLegendData(query *string, timeFrom string, timeTo string) (chartData 
 	}
 
 	return chartData, nil
+}
+
+func GetScatterData(query *string, timeFrom string, timeTo string) (chartDataOutput []ScatterDataOutput, err error) {
+	var chartData []ScatterData
+	var queryString string
+
+	// 1. Check if query contains substring '%s'. If so, the component can be queried by time.
+	if strings.Count(*query, "%s") == 2 {
+		queryString = fmt.Sprintf(*query, timeFrom, timeTo)
+	} else {
+		queryString = *query
+	}
+
+	// 2. Get the data from the database
+	err = DBDashboard.Raw(queryString).Scan(&chartData).Error
+	if err != nil {
+		return chartDataOutput, err
+	}
+	if len(chartData) == 0 {
+		return chartDataOutput, err
+	}
+
+	// 3. Convert the data to the format required by the front-end
+	for _, data := range chartData {
+		// Group data together by yAxis
+		var foundY bool
+		for i, output := range chartDataOutput {
+			if output.Name == data.Yaxis {
+				// Append the data to the output
+				chartDataOutput[i].Data = append(output.Data, ScatterDataItem{X: data.Xaxis, Y: data.Data})
+				foundY = true
+				break
+			}
+		}
+
+		// If a unique yAxis is found, create a new entry in the output
+		if !foundY {
+			chartDataOutput = append(chartDataOutput, ScatterDataOutput{Name: data.Yaxis, Data: []ScatterDataItem{{X: data.Xaxis, Y: data.Data}}})
+		}
+	}
+
+	return chartDataOutput, nil
+}
+
+func GetBubbleData(query *string, timeFrom string, timeTo string) (chartDataOutput []BubbleDataOutput, err error) {
+	var chartData []BubbleData
+	var queryString string
+
+	// 1. Check if query contains substring '%s'. If so, the component can be queried by time.
+	if strings.Count(*query, "%s") == 2 {
+		queryString = fmt.Sprintf(*query, timeFrom, timeTo)
+	} else {
+		queryString = *query
+	}
+
+	// 2. Get the data from the database
+	err = DBDashboard.Raw(queryString).Scan(&chartData).Error
+	if err != nil {
+		return chartDataOutput, err
+	}
+	if len(chartData) == 0 {
+		return chartDataOutput, err
+	}
+
+	// 3. Convert the data to the format required by the front-end
+	for _, data := range chartData {
+		// Group data together by yAxis
+		var foundY bool
+		for i, output := range chartDataOutput {
+			if output.Name == data.Yaxis {
+				// Append the data to the output
+				chartDataOutput[i].Data = append(output.Data, BubbleDataItem{X: data.Xaxis, Y: data.Data, Z: data.Size})
+				foundY = true
+				break
+			}
+		}
+
+		// If a unique yAxis is found, create a new entry in the output
+		if !foundY {
+			chartDataOutput = append(chartDataOutput, BubbleDataOutput{Name: data.Yaxis, Data: []BubbleDataItem{{X: data.Xaxis, Y: data.Data, Z: data.Size}}})
+		}
+	}
+
+	return chartDataOutput, nil
 }

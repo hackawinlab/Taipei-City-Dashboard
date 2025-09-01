@@ -1,0 +1,25 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+	<title>泡泡圖ICON</title>
+	<style>
+		tspan { white-space:pre } 
+		.s0 { fill: #000000 } 
+		.s1 { opacity: .5;fill: #000000 } 
+	</style>
+	<g id="泡泡圖">
+		<!-- X軸 -->
+		<path id="X-axis" class="s0" d="m128 896h768v-32h-768z"/>
+		<!-- Y軸 -->
+		<path id="Y-axis" class="s0" d="m128 128v768h32v-768z"/>
+		<!-- 泡泡點 - 不同大小 -->
+		<circle id="bubble1" class="s0" cx="256" cy="768" r="12"/>
+		<circle id="bubble2" class="s0" cx="384" cy="640" r="20"/>
+		<circle id="bubble3" class="s0" cx="512" cy="512" r="16"/>
+		<circle id="bubble4" class="s0" cx="640" cy="384" r="24"/>
+		<circle id="bubble5" class="s0" cx="768" cy="256" r="18"/>
+		<circle id="bubble6" class="s1" cx="320" cy="704" r="10"/>
+		<circle id="bubble7" class="s1" cx="448" cy="576" r="14"/>
+		<circle id="bubble8" class="s1" cx="576" cy="448" r="22"/>
+		<circle id="bubble9" class="s1" cx="704" cy="320" r="12"/>
+		<circle id="bubble10" class="s1" cx="832" cy="192" r="16"/>
+	</g>
+</svg> 

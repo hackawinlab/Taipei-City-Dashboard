@@ -69,8 +69,22 @@ func GetComponentChartData(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "success", "data": chartData, "categories": categories})
-	} else if queryType == "time" {
+	} else if queryType == "time" || queryType == "area" {
 		chartData, err := models.GetTimeSeriesData(&queryString, timeFrom, timeTo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "success", "data": chartData})
+	} else if queryType == "scatter" {
+		chartData, err := models.GetScatterData(&queryString, timeFrom, timeTo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "success", "data": chartData})
+	} else if queryType == "bubble" {
+		chartData, err := models.GetBubbleData(&queryString, timeFrom, timeTo)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 			return

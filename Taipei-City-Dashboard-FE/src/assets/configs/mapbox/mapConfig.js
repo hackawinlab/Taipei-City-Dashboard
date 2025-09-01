@@ -459,6 +459,48 @@ export const maplayerCommonLayout = {
 			1.4,
 		],
 	},
+	"symbol-aed": {
+		"icon-image": "aed",
+		"icon-size": [
+			"interpolate",
+			["linear"],
+			["zoom"],
+			11.99,
+			0.7,
+			14,
+			1.1,
+			22,
+			1.4,
+		],
+	},
+	"symbol-lung": {
+		"icon-image": "lung",
+		"icon-size": [
+			"interpolate",
+			["linear"],
+			["zoom"],
+			11.99,
+			0.7,
+			14,
+			1.1,
+			22,
+			1.4,
+		],
+	},
+	"symbol-hospital": {
+		"icon-image": "hospital",
+		"icon-size": [
+			"interpolate",
+			["linear"],
+			["zoom"],
+			11.99,
+			0.7,
+			14,
+			1.1,
+			22,
+			1.4,
+		],
+	},
 	"symbol-cctv": {
 		"icon-image": "cctv",
 		"icon-size": [

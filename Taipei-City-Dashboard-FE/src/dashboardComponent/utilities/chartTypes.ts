@@ -12,6 +12,7 @@ export const chartTypes: chartType = {
 	MetroChart: "捷運行駛圖", // V
 	TimelineSeparateChart: "折線圖(比較)", // V
 	TimelineStackedChart: "折線圖(堆疊)", // V
+	NegativeLineChart: "負值折線圖", // V
 	GuageChart: "量表圖", // V
 	RadarChart: "雷達圖", // V
 	HeatmapChart: "熱力圖", // V
@@ -23,4 +24,8 @@ export const chartTypes: chartType = {
 	IndicatorChart: "指標圖", // V
 	MapLegend: "地圖圖例", // V
 	TextUnitChart: "文字數值圖", // V
+	PopulationPyramid: "人口金字塔圖", // V
+	ScatterChart: "散點圖", // V
+	BubbleChart: "泡泡圖", // V
+	AreaChart: "面積圖", // V
 };

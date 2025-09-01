@@ -1,0 +1,25 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+	<title>散點圖ICON</title>
+	<style>
+		tspan { white-space:pre } 
+		.s0 { fill: #000000 } 
+		.s1 { opacity: .5;fill: #000000 } 
+	</style>
+	<g id="散點圖">
+		<!-- X軸 -->
+		<path id="X-axis" class="s0" d="m128 896h768v-32h-768z"/>
+		<!-- Y軸 -->
+		<path id="Y-axis" class="s0" d="m128 128v768h32v-768z"/>
+		<!-- 散點 -->
+		<circle id="point1" class="s0" cx="256" cy="768" r="16"/>
+		<circle id="point2" class="s0" cx="384" cy="640" r="16"/>
+		<circle id="point3" class="s0" cx="512" cy="512" r="16"/>
+		<circle id="point4" class="s0" cx="640" cy="384" r="16"/>
+		<circle id="point5" class="s0" cx="768" cy="256" r="16"/>
+		<circle id="point6" class="s1" cx="320" cy="704" r="16"/>
+		<circle id="point7" class="s1" cx="448" cy="576" r="16"/>
+		<circle id="point8" class="s1" cx="576" cy="448" r="16"/>
+		<circle id="point9" class="s1" cx="704" cy="320" r="16"/>
+		<circle id="point10" class="s1" cx="832" cy="192" r="16"/>
+	</g>
+</svg> 
