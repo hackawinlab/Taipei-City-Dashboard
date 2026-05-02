@@ -7,6 +7,7 @@ import http from "../../router/axios";
 const props = defineProps([
 	"chart_config",
 	"activeChart",
+	"activeCity",
 	"series",
 	"map_config",
 	"map_filter",
@@ -20,7 +21,9 @@ const TOTAL_SLOTS = 24 * SLOTS_PER_HOUR; // 96
 
 const currentSlot = ref(0);
 const playing = ref(false);
-const cityFilter = ref("all"); // "all" = 雙北, "Taipei" = 台北市
+// Dashboard-level dropdown (DashboardComponent's selectBtn) drives this:
+// item.city is "taipei" → API "Taipei"; "metrotaipei" / anything else → "all" (雙北).
+const cityFilter = computed(() => (props.activeCity === "taipei" ? "Taipei" : "all"));
 const cache = reactive({});
 const currentFeatures = ref([]);
 
@@ -116,12 +119,6 @@ watch(cityFilter, () => {
 	clearTimeout(debounceTimer);
 	debounceTimer = setTimeout(() => fetchSlot(currentSlot.value), 100);
 });
-
-function setCity(value) {
-	if (cityFilter.value === value) return;
-	if (playing.value) togglePlay();
-	cityFilter.value = value;
-}
 
 function pauseIfPlaying() {
 	if (playing.value) togglePlay();
@@ -316,20 +313,6 @@ onUnmounted(() => {
     <!-- Header: time label + play button -->
     <div class="youbike-timemap-header">
       <span class="hour-label">{{ currentLabel }}</span>
-      <div class="youbike-timemap-city">
-        <button
-          :class="{ active: cityFilter === 'Taipei' }"
-          @click="setCity('Taipei')"
-        >
-          台北市
-        </button>
-        <button
-          :class="{ active: cityFilter === 'all' }"
-          @click="setCity('all')"
-        >
-          雙北
-        </button>
-      </div>
       <button
         class="play-btn"
         @click="togglePlay"
@@ -394,30 +377,6 @@ onUnmounted(() => {
                 font-family: var(--font-icon);
                 font-size: 1.5rem;
                 color: var(--color-highlight);
-            }
-        }
-    }
-
-    &-city {
-        display: flex;
-        column-gap: 4px;
-
-        button {
-            padding: 2px 10px;
-            border: 1px solid var(--color-border);
-            border-radius: 999px;
-            background: transparent;
-            color: var(--color-complement-text);
-            font-size: var(--font-s);
-            cursor: pointer;
-            transition: background 0.2s, color 0.2s, border-color 0.2s;
-
-            &:hover { color: var(--color-normal-text); }
-
-            &.active {
-                background: var(--color-highlight);
-                border-color: var(--color-highlight);
-                color: var(--color-normal-text);
             }
         }
     }
