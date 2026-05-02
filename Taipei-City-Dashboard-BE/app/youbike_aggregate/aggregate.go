@@ -75,7 +75,9 @@ type hourCity struct {
 }
 
 // Payload mirrors the subset of the original aggregator JSON that the
-// frontend actually reads (see Taipei-City-Dashboard-FE/src/store/youbikeShortageBlocks.js).
+// frontend actually reads (see controllers/commute.go's GetYouBikePersistenceChart
+// and GetYouBikeImbalanceChart — rhythm and heatmap blocks are computed but no
+// longer surfaced to the dashboard, pending a follow-up PR that slims this down).
 type Payload struct {
 	TimelineLow    []TimelineSeries                     `json:"timeline_low"`
 	BarPersistence map[string][]PersistenceEntry        `json:"bar_persistence"`
