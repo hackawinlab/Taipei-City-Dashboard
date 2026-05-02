@@ -339,10 +339,6 @@ GET /api/v1/commute/youbike/imbalance?city=taipei|metrotaipei
   → { status, data: [{name, data: [{x: station, y: -imbalance}, ...]}], categories: [...] } (top 15)
 ```
 
-**遺留**：
-- `aggregate.go` 仍計算 rhythm 與 heatmap 兩段（沒人讀）；`/commute/youbike/shortage-analysis` 路由保留。下個 PR 再瘦身。
-- `contentStore.getCurrentComponentData`（標準 `/component/:index` 路由用）目前不認 `chart_config.api_endpoint`，所以直接訪問 `http://.../component/youbike_persistence?city=taipei` 圖表會空。dashboard 內 chart-data fetch 與「組件資訊」modal 都走 cached 資料、不受影響。修法是在 `getCurrentComponentData` 鏡像 `setCurrentDashboardAllChartData` 的 api_endpoint 分支，或抽出共用 helper。
-
 ---
 
 ## Key Conventions

@@ -2,9 +2,9 @@
 
 > 此文件描述「YouBike 缺車成因分析」要呈現的 user story，以及兩個重點 block 背後的資料做法。
 >
-> **整合狀態（2026-05-03）**：兩個重點 block 已併入 `youbike-analysis-{taipei,metrotaipei}` dashboard 作為真實 BE component；舊的純前端 `youbike-shortage-analysis-*` 入口已收掉。Block 1（rhythm）與 Block 4（heatmap）兩個輔助 block 已停用，但 `aggregate.go` 仍保留計算待後續瘦身。對應程式碼：
-> - 後端聚合：`Taipei-City-Dashboard-BE/app/youbike_aggregate/aggregate.go`
-> - 後端路由：`Taipei-City-Dashboard-BE/app/controllers/commute.go`（`GetYouBikePersistenceChart`、`GetYouBikeImbalanceChart`，舊的 `GetYouBikeShortageAnalysis` 也保留）
+> **整合狀態（2026-05-03）**：兩個重點 block 已併入 `youbike-analysis-{taipei,metrotaipei}` dashboard 作為真實 BE component；舊的純前端 `youbike-shortage-analysis-*` 入口已收掉，原 Block 1（rhythm）與 Block 4（heatmap）兩個輔助 block 已隨 `aggregate.go` 瘦身一併移除。對應程式碼：
+> - 後端聚合：`Taipei-City-Dashboard-BE/app/youbike_aggregate/aggregate.go`（`Payload` 只剩 `BarPersistence` + `Imbalance`）
+> - 後端路由：`Taipei-City-Dashboard-BE/app/controllers/commute.go`（`GetYouBikePersistenceChart`、`GetYouBikeImbalanceChart`）
 > - DB seed：`db-sample-data/youbike-shortage-blocks-seed.sql`
 
 ---
