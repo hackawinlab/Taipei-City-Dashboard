@@ -74,3 +74,8 @@ Taipei-City-Dashboard-DE/docker/prod/.env
 *.py[cod]
 
 *.env
+
+# Local Claude Code overrides — personal AI guidance not shared with team.
+# 專案版 CLAUDE.md 由團隊共同維護；個人偏好寫在 CLAUDE.local.md 不入庫。
+CLAUDE.local.md
+**/CLAUDE.local.md
