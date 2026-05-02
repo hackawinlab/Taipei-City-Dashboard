@@ -106,8 +106,14 @@ function buildBlocks(ds, slice) {
 		y: s.empty_hours,
 	}));
 
-	// === 站點時段填充率變化（熱力圖）===
-	const heatmap = ds.heatmap?.[datasetKey] ?? { categories: [], series: [] };
+	// === 站點時段車量變化（熱力圖）===
+	// 限制 row 數，避免在 fit 模式下 cells 過小、station 標籤被切掉。
+	const HEATMAP_ROW_LIMIT = 12;
+	const heatmapRaw = ds.heatmap?.[datasetKey] ?? { categories: [], series: [] };
+	const heatmap = {
+		categories: heatmapRaw.categories,
+		series: (heatmapRaw.series ?? []).slice(0, HEATMAP_ROW_LIMIT),
+	};
 
 	// === 站點淨流出量排行（含補車依賴度 dispatch_dependency 分類）===
 	// imbalance 結構：{ absolute: [...], per_dock: [...] }（aggregator v2）
@@ -211,12 +217,12 @@ function buildBlocks(ds, slice) {
 			id: 9003,
 			index: "youbike_heatmap",
 			city,
-			name: "YouBike 站點時段填充率變化",
+			name: "YouBike 站點時段車量變化",
 			source: SOURCE,
 			short_desc:
-				"顯示一日填充率變化幅度最大之前 25 站於各時段之填充率，色階由紅至綠對應 0% 至 100%。",
+				"顯示一日車量變化幅度最大之前 12 站於各時段的車量比例，紅色為缺車、綠色為車量充足。",
 			long_desc:
-				"以 30 分鐘間隔快照計算每站於各時段之填充率（fill_ratio = 可借車輛 ÷ 車柱數），並依一日之最大值與最小值差距由高至低取前 25 站，呈現各站於不同時段之車量變化情形。色階由紅至綠對應填充率 0% 至 100%，可觀察單站之日間流動模式（如早晨車量充足、下午車量下降，或反之）。資料採用 2026/05/01 之單日快照，跨站之車流方向分析建議參考線上「YouBike2.0 週間群像」「YouBike2.0 週末群像」之 OD 矩陣資料。",
+				"以 30 分鐘間隔快照計算每站於各時段之車量比例（可借車輛數 ÷ 車柱總數），並依一日之最大與最小車量比例差距由高至低取前 12 站，呈現各站於不同時段之車量變化情形。色階紅色至綠色對應車量比例 0% 至 100%（紅色為缺車、綠色為車量充足），可觀察單站之日間流動模式，如早晨車量充足、下午車量下降，或反之。資料採用 2026/05/01 之單日快照，跨站之車流方向分析建議參考線上「YouBike2.0 週間群像」「YouBike2.0 週末群像」之 OD 矩陣資料。",
 			use_case:
 				"輔助觀察單一站點之日間車量變化模式，作為站點調度時段安排之參考。",
 			...TIME_META,
