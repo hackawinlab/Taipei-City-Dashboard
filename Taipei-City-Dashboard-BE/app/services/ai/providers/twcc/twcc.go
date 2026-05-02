@@ -441,12 +441,15 @@ func extractXMLToolCalls(text string) ([]llms.ToolCall, string) {
 	var toolCalls []llms.ToolCall
 	remainingText := text
 
-	// Basic regex-free parsing for reliability with AFS fragments
+	// Basic regex-free parsing for reliability with AFS fragments.
+	// Try the more specific "tool<function=" prefix first so that the leading
+	// "tool" token is included in the stripped range and does not leak into
+	// the returned content string.
 	for {
-		startTag := "<function="
+		startTag := "tool<function="
 		startIdx := strings.Index(remainingText, startTag)
 		if startIdx == -1 {
-			startTag = "tool<function="
+			startTag = "<function="
 			startIdx = strings.Index(remainingText, startTag)
 			if startIdx == -1 { break }
 		}
