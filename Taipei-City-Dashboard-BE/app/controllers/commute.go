@@ -57,9 +57,9 @@ func GetYouBikeMap(c *gin.Context) {
 
 	query := `
 SELECT station_uid, station_name, lat, lon, city,
-  ROUND(AVG(available_bikes::float / NULLIF(total_docks,0)) * 100, 1) AS availability_pct,
-  ROUND(AVG(available_bikes), 0)                                       AS avg_available,
-  MAX(total_docks)                                                      AS total_docks
+  ROUND((AVG(available_bikes::float / NULLIF(total_docks,0)) * 100)::numeric, 1) AS availability_pct,
+  ROUND(AVG(available_bikes)::numeric, 0)                                         AS avg_available,
+  MAX(total_docks)                                                                 AS total_docks
 FROM youbike_snapshots
 WHERE (city = $1 OR $1 = 'all')
   AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2
