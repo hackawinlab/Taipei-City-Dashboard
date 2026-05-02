@@ -351,24 +351,32 @@ export const useContentStore = defineStore("content", {
 				) {
 					const component = this.cityDashboard.components[index];
 					try {
-						// 4-2. Get chart data
-						const response = await http.get(
-							`/component/${component.id}/chart`,
-							{
-								params: {
-									city: component.city,
-									...(!["static", "current", "demo"].includes(
-										component.time_from,
-									)
-										? getComponentDataTimeframe(
+						// 4-2. Get chart data — components with chart_config.api_endpoint
+						// (mirror of component_maps.api_endpoint) take priority over the
+						// stored SQL path, letting BE controllers serve computed metrics
+						// from a different DB without faking SQL through GORM.
+						const apiEndpoint = component.chart_config?.api_endpoint;
+						const response = apiEndpoint
+							? await http.get(apiEndpoint, {
+									params: { city: component.city },
+								})
+							: await http.get(
+									`/component/${component.id}/chart`,
+									{
+										params: {
+											city: component.city,
+											...(!["static", "current", "demo"].includes(
 												component.time_from,
-												component.time_to,
-												true,
 											)
-										: {}),
-								},
-							},
-						);
+												? getComponentDataTimeframe(
+														component.time_from,
+														component.time_to,
+														true,
+													)
+												: {}),
+										},
+									},
+								);
 
 						this.cityDashboard.components[index].chart_data =
 							response.data.data;
