@@ -258,12 +258,12 @@ function handleDataSelection(_e, _chartContext, config) {
 </template>
 
 <style scoped lang="scss">
-.heatmapchart {
-	&-fit {
-		height: 100%;
-		overflow: hidden;
-	}
+.heatmapchart-fit {
+	height: 100%;
+	overflow: hidden;
+}
 
+.heatmapchart {
 	&-title {
 		display: flex;
 		justify-content: center;
