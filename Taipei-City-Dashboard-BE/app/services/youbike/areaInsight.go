@@ -20,7 +20,7 @@ type AreaInsight struct {
 }
 
 // SummarizeArea aggregates availability around a center point at a
-// given hour×quarter. Tries 500m first, expands to 1500m if no stations
+// given hour×quarter. Tries 300m first, expands to 1000m if no stations
 // land in the tight box. Returns (zero, false) when DB has nothing
 // nearby for the requested time slot.
 func SummarizeArea(centerLng, centerLat float64, hour, quarter int) (AreaInsight, bool) {

@@ -44,6 +44,7 @@ const stats = computed(() => {
 let playInterval = null;
 let debounceTimer = null;
 let unmounted = false;
+let prefetching = false;
 
 const layerId = computed(() => {
 	if (!props.map_config || props.map_config.length === 0) return null;
@@ -88,10 +89,16 @@ async function fetchSlot(slot) {
 }
 
 async function prefetchAll() {
-	for (let s = 0; s < TOTAL_SLOTS; s++) {
-		if (unmounted) return;
-		await fetchSlot(s);
-		await new Promise((resolve) => setTimeout(resolve, 50));
+	if (prefetching) return;
+	prefetching = true;
+	try {
+		for (let s = 0; s < TOTAL_SLOTS; s++) {
+			if (unmounted) return;
+			await fetchSlot(s);
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+	} finally {
+		prefetching = false;
 	}
 }
 
@@ -155,7 +162,6 @@ function applyAIEvent(event) {
 		}
 		pauseIfPlaying();
 		currentSlot.value = nextSlot;
-		fetchSlot(nextSlot);
 		break;
 	}
 	case "focus_location": {
@@ -163,9 +169,9 @@ function applyAIEvent(event) {
 		if (!mapStore.map) return;
 		mapStore.easeToLocation([
 			payload.center,
-			payload.zoom || 15,
-			payload.pitch || 45,
-			payload.bearing || 0,
+			Number.isFinite(payload.zoom) ? payload.zoom : 15,
+			Number.isFinite(payload.pitch) ? payload.pitch : 45,
+			Number.isFinite(payload.bearing) ? payload.bearing : 0,
 			payload.place || "AI 指定位置",
 		]);
 		if (Number.isFinite(payload.radius_meters)) {

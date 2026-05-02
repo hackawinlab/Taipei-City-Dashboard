@@ -202,9 +202,9 @@ func configureAIRoutes() {
 	aiRoutes := RouterGroup.Group("/ai")
 	aiRoutes.Use(middleware.LimitAPIRequests(global.ComponentLimitAPIRequestsTimes, global.LimitRequestsDuration))
 	aiRoutes.Use(middleware.LimitTotalRequests(global.ComponentLimitTotalRequestsTimes, global.LimitRequestsDuration))
-	aiRoutes.POST("/component-action", controllers.ComponentAIAction)
 	aiRoutes.Use(middleware.IsLoggedIn())
 	{
+		aiRoutes.POST("/component-action", controllers.ComponentAIAction)
 		aiRoutes.POST("/chat/twai", controllers.ChatWithTWCC)
 	}
 }
