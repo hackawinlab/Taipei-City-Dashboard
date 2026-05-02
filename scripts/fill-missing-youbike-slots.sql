@@ -50,9 +50,9 @@ BEGIN
 
         INSERT INTO youbike_snapshots
             (station_uid, station_name, lat, lon, city,
-             available_bikes, total_docks, snapshot_at)
+             available_bikes, electric_bikes, total_docks, snapshot_at)
         SELECT station_uid, station_name, lat, lon, city,
-               available_bikes, total_docks, tgt_ts
+               available_bikes, electric_bikes, total_docks, tgt_ts
         FROM youbike_snapshots
         WHERE city = rec.city AND snapshot_at = src_ts
         ON CONFLICT (station_uid, snapshot_at) DO NOTHING;

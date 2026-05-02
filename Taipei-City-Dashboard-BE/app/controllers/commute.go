@@ -154,8 +154,12 @@ ORDER BY availability_pct ASC`
 }
 
 // GetYouBikeStationHourly handles GET /api/v1/commute/youbike/station/:uid/hourly
-// Returns 24-element arrays of average available_bikes and capacity (max total_docks)
-// for the given station, indexed by Asia/Taipei hour 0..23.
+// Returns 96-element arrays (one per 15-min slot, Asia/Taipei) of:
+//   - avg available_bikes (total bikes available, includes EVs)
+//   - avg electric_bikes  (electric subset of available)
+//   - max total_docks     (capacity)
+//
+// Slot index = hour*4 + (minute/15), so 0 = 00:00, 95 = 23:45.
 func GetYouBikeStationHourly(c *gin.Context) {
 	uid := c.Param("uid")
 	if uid == "" {
@@ -168,12 +172,16 @@ func GetYouBikeStationHourly(c *gin.Context) {
 		return
 	}
 
+	const slotCount = 96
+
 	query := `
-SELECT EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int AS hour,
-       ROUND(AVG(available_bikes)::numeric, 1)::float                 AS avg_available,
-       MAX(total_docks)                                                AS total_docks,
-       MAX(station_name)                                               AS station_name,
-       MAX(city)                                                       AS city
+SELECT (EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int * 4
+        + EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) AS slot,
+       ROUND(AVG(available_bikes)::numeric, 1)::float                            AS avg_available,
+       ROUND(AVG(electric_bikes)::numeric, 1)::float                             AS avg_electric,
+       MAX(total_docks)                                                          AS total_docks,
+       MAX(station_name)                                                         AS station_name,
+       MAX(city)                                                                 AS city
 FROM youbike_snapshots
 WHERE station_uid = $1
 GROUP BY 1
@@ -192,25 +200,28 @@ ORDER BY 1`
 	}
 	defer rows.Close()
 
-	available := make([]float64, 24)
-	total := make([]int64, 24)
+	available := make([]float64, slotCount)
+	electric := make([]float64, slotCount)
+	total := make([]int64, slotCount)
 	var stationName, stationCity string
 
 	for rows.Next() {
 		var (
-			hour       int
+			slot       int
 			avgAvail   sql.NullFloat64
+			avgElec    sql.NullFloat64
 			totalDocks sql.NullInt64
 			name       sql.NullString
 			city       sql.NullString
 		)
-		if err := rows.Scan(&hour, &avgAvail, &totalDocks, &name, &city); err != nil {
+		if err := rows.Scan(&slot, &avgAvail, &avgElec, &totalDocks, &name, &city); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("scan error: %v", err)})
 			return
 		}
-		if hour >= 0 && hour < 24 {
-			available[hour] = avgAvail.Float64
-			total[hour] = totalDocks.Int64
+		if slot >= 0 && slot < slotCount {
+			available[slot] = avgAvail.Float64
+			electric[slot] = avgElec.Float64
+			total[slot] = totalDocks.Int64
 		}
 		if name.Valid && stationName == "" {
 			stationName = name.String
@@ -229,9 +240,11 @@ ORDER BY 1`
 		return
 	}
 
-	hours := make([]string, 24)
-	for h := 0; h < 24; h++ {
-		hours[h] = strconv.Itoa(h)
+	slots := make([]string, slotCount)
+	for s := 0; s < slotCount; s++ {
+		h := s / 4
+		m := (s % 4) * 15
+		slots[s] = fmt.Sprintf("%02d:%02d", h, m)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -239,8 +252,9 @@ ORDER BY 1`
 			"station_uid":     uid,
 			"station_name":    stationName,
 			"city":            stationCity,
-			"hours":           hours,
+			"slots":           slots,
 			"available_bikes": available,
+			"electric_bikes":  electric,
 			"total_docks":     total,
 		},
 	})

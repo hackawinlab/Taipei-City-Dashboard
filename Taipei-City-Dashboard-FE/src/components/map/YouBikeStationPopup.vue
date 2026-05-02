@@ -9,15 +9,27 @@ const props = defineProps({
 	city: { type: String, default: "" },
 });
 
+const SLOT_COUNT = 96;
+
 const loading = ref(true);
 const error = ref(null);
 const stationName = ref(props.stationName);
 
-const series = ref([{ name: "可借車輛", data: Array(24).fill(0) }]);
+const series = ref([
+	{ name: "一般車", data: Array(SLOT_COUNT).fill(0) },
+	{ name: "電輔車", data: Array(SLOT_COUNT).fill(0) },
+]);
+
+const xCategories = Array.from({ length: SLOT_COUNT }, (_, s) => {
+	const h = Math.floor(s / 4);
+	const m = (s % 4) * 15;
+	return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+});
 
 const chartOptions = ref({
 	chart: {
 		type: "bar",
+		stacked: true,
 		toolbar: { show: false },
 		zoom: { allowMouseWheelZoom: false },
 		animations: { enabled: false },
@@ -25,9 +37,9 @@ const chartOptions = ref({
 		background: "transparent",
 	},
 	theme: { mode: "dark" },
-	colors: ["#22c55e"],
+	colors: ["#22c55e", "#38bdf8"],
 	plotOptions: {
-		bar: { horizontal: false, columnWidth: "70%", borderRadius: 2 },
+		bar: { horizontal: false, columnWidth: "95%", borderRadius: 0 },
 	},
 	dataLabels: { enabled: false },
 	stroke: { show: false },
@@ -39,16 +51,23 @@ const chartOptions = ref({
 		xaxis: { lines: { show: false } },
 	},
 	xaxis: {
-		categories: Array.from({ length: 24 }, (_, h) =>
-			h % 3 === 0 ? `${String(h).padStart(2, "0")}` : "",
-		),
+		categories: xCategories,
 		title: {
-			text: "小時 (Asia/Taipei)",
+			text: "時間 (Asia/Taipei，每 15 分鐘)",
 			style: { color: "#9ca3af", fontSize: "10px", fontWeight: 400 },
 		},
-		labels: { style: { colors: "#9ca3af", fontSize: "10px" } },
+		labels: {
+			style: { colors: "#9ca3af", fontSize: "10px" },
+			rotate: 0,
+			hideOverlappingLabels: true,
+			formatter: (val) =>
+				val && val.endsWith(":00") && Number(val.split(":")[0]) % 3 === 0
+					? val.split(":")[0]
+					: "",
+		},
 		axisBorder: { show: false },
 		axisTicks: { show: false },
+		tickAmount: 8,
 	},
 	yaxis: {
 		title: {
@@ -60,10 +79,20 @@ const chartOptions = ref({
 			formatter: (v) => Math.round(v),
 		},
 	},
-	legend: { show: false },
+	legend: {
+		show: true,
+		position: "top",
+		horizontalAlign: "right",
+		labels: { colors: "#d1d5db" },
+		markers: { width: 10, height: 10, radius: 2 },
+		fontSize: "11px",
+		offsetY: -2,
+	},
 	tooltip: {
 		theme: "dark",
-		x: { formatter: (_, { dataPointIndex }) => `${dataPointIndex}:00` },
+		shared: true,
+		intersect: false,
+		x: { formatter: (_, { dataPointIndex }) => xCategories[dataPointIndex] },
 		y: { formatter: (v) => `${v.toFixed(1)} 輛` },
 	},
 	annotations: { yaxis: [] },
@@ -76,11 +105,19 @@ onMounted(async () => {
 		);
 		const d = res.data?.data ?? {};
 		stationName.value = d.station_name || stationName.value;
-		const available = d.available_bikes ?? Array(24).fill(0);
+		const available = d.available_bikes ?? Array(SLOT_COUNT).fill(0);
+		const electric = d.electric_bikes ?? Array(SLOT_COUNT).fill(0);
 		const total = d.total_docks ?? [];
+		// Regular = available - electric (clamp to >= 0 to guard against rounding)
+		const regular = available.map((a, i) =>
+			Math.max(0, +(a - (electric[i] || 0)).toFixed(1)),
+		);
 		const capacity = total.length ? Math.max(...total) : 0;
 
-		series.value = [{ name: "可借車輛", data: available }];
+		series.value = [
+			{ name: "一般車", data: regular },
+			{ name: "電輔車", data: electric },
+		];
 
 		if (capacity > 0) {
 			chartOptions.value = {
@@ -125,12 +162,6 @@ onMounted(async () => {
 	<div class="youbike-station-popup">
 		<div class="youbike-station-popup-header">
 			<span class="station-name">{{ stationName || "YouBike 站點" }}</span>
-			<span
-				v-if="city"
-				class="station-city"
-			>
-				{{ city === "Taipei" ? "台北市" : "新北市" }}
-			</span>
 		</div>
 		<div
 			v-if="loading"
@@ -163,20 +194,12 @@ onMounted(async () => {
 	font-size: var(--font-s, 12px);
 
 	&-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
 		margin: 6px 4px 8px 12px;
-		gap: 8px;
 
 		.station-name {
 			font-weight: 600;
 			font-size: 14px;
 			color: var(--color-highlight, #22c55e);
-		}
-		.station-city {
-			font-size: 11px;
-			color: var(--color-complement-text, #9ca3af);
 		}
 	}
 

@@ -73,9 +73,11 @@ CREATE TABLE IF NOT EXISTS youbike_snapshots (
   lon             DOUBLE PRECISION  NOT NULL,
   city            VARCHAR(20)       NOT NULL,
   available_bikes INT               NOT NULL DEFAULT 0,
+  electric_bikes  INT               NOT NULL DEFAULT 0,
   total_docks     INT               NOT NULL DEFAULT 0,
   snapshot_at     TIMESTAMPTZ       NOT NULL
 );
+ALTER TABLE youbike_snapshots ADD COLUMN IF NOT EXISTS electric_bikes INT NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_youbike_snapshots_station_time
     ON youbike_snapshots(station_uid, snapshot_at);
 CREATE INDEX IF NOT EXISTS idx_youbike_hour ON youbike_snapshots
@@ -107,13 +109,14 @@ SQL
         cat <<'SQL'
 INSERT INTO youbike_snapshots (
     station_uid, station_name, lat, lon, city,
-    available_bikes, total_docks, snapshot_at
+    available_bikes, electric_bikes, total_docks, snapshot_at
 )
 SELECT
     station_uid, station_name, lat, lon, city,
-    available_bikes, total_docks, snapshot_at
+    available_bikes, COALESCE(electric_bikes, 0), total_docks, snapshot_at
 FROM _stg_youbike
-ON CONFLICT (station_uid, snapshot_at) DO NOTHING;
+ON CONFLICT (station_uid, snapshot_at) DO UPDATE
+    SET electric_bikes = EXCLUDED.electric_bikes;
 COMMIT;
 SQL
     } | psql_db "${HACKATHON_DB}" -q
