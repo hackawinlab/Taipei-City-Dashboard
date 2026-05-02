@@ -1,0 +1,36 @@
+{
+  "dag_infos": {
+    "dag_id": "bus_congestion_poll",
+    "start_date": "2025-05-02",
+    "schedule_interval": "*/2 * * * *",
+    "catchup": false,
+    "tags": ["bus_congestion", "realtime", "taipei", "newtaipei"],
+    "description": "Poll Taipei + NewTaipei bus ETA every 2 min and append to CSV.",
+    "default_args": {
+      "owner": "airflow",
+      "email": ["DEFAULT_EMAIL_LIST"],
+      "email_on_retry": false,
+      "email_on_failure": false,
+      "retries": 0,
+      "retry_delay": 60
+    },
+    "ready_data_db": "postgres_default",
+    "ready_data_default_table": "bus_congestion_segments",
+    "raw_data_db": "postgres_default",
+    "raw_data_table": "",
+    "load_behavior": "append"
+  },
+  "data_infos": {
+    "name_cn": "公車壅塞 ETA Poller",
+    "airflow_update_freq": "每 2 分鐘",
+    "source": "https://tcgbusfs.blob.core.windows.net/blobbus/GetEstimateTime.gz",
+    "source_type": "blob + TDX API",
+    "source_dept": "臺北市交通局 / 新北市交通局",
+    "gis_format": null,
+    "output_coordinate": "",
+    "is_geometry": 0,
+    "dataset_description": "全城公車 ETA snapshot，用於壅塞偵測",
+    "etl_description": "fetch ETA blob (taipei) + TDX API (newtaipei), append to daily CSV",
+    "sensitivity": "public"
+  }
+}

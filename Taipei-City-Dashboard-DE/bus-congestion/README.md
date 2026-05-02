@@ -45,24 +45,38 @@ psql -h localhost -p 5432 -U postgres -d dashboardmanager \
   -f ../../db-sample-data/bus-congestion-manager.sql
 ```
 
-### 4. 啟動 Poller
+### 4. 整合 Airflow（推薦）
+
+本 PoC 已整合進 Airflow DAG 系統，位於 `Taipei-City-Dashboard-DE/dags/proj_city_dashboard/`：
+
+| DAG | 排程 | 說明 |
+|-----|------|------|
+| `bus_congestion_poll` | `*/2 * * * *` | 抓 ETA snapshot → CSV |
+| `bus_congestion_map` | `*/5 * * * *` | 分析 + 更新 GeoJSON + DB |
+
+**Airflow Variables 設定（在 Airflow UI 的 Admin → Variables）：**
+
+| Variable | 說明 |
+|----------|------|
+| `TDX_CLIENT_ID` | TDX API Client ID |
+| `TDX_CLIENT_SECRET` | TDX API Client Secret |
+| `DASHBOARD_FE_PUBLIC_DIR` | FE public/ 目錄路徑（GeoJSON 輸出用） |
+
+> 啟動 Airflow 後，DAG 自動出現在 UI 中，手動 trigger 一次 `bus_congestion_poll` 確認資料能正常抓取，再啟用排程即可。
+
+### 4-alt. 手動執行（不使用 Airflow）
+
+若本地測試不想起 Airflow，仍可用原始方式：
 
 ```bash
-# 載入 env
-source .env  # 或 export TDX_CLIENT_ID=... TDX_CLIENT_SECRET=...
-
-# 背景執行
+source .env
 nohup python3 poller.py > logs/poller.log 2>&1 &
 ```
 
-### 5. 設定 Cron（每 5 分鐘更新地圖）
+並手動觸發 populate：
 
 ```bash
-# 編輯 crontab
-crontab -e
-
-# 加入以下行（調整路徑）：
-# */5 * * * * cd /path/to/bus-congestion && source .env && python3 populate_db.py >> logs/populate.log 2>&1
+source .env && python3 populate_db.py
 ```
 
 ## 演算法說明

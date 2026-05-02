@@ -1,0 +1,36 @@
+{
+  "dag_infos": {
+    "dag_id": "bus_congestion_map",
+    "start_date": "2025-05-02",
+    "schedule_interval": "*/5 * * * *",
+    "catchup": false,
+    "tags": ["bus_congestion", "realtime", "taipei", "newtaipei", "geojson"],
+    "description": "Analyze ETA errors, write GeoJSON + DB every 5 min.",
+    "default_args": {
+      "owner": "airflow",
+      "email": ["DEFAULT_EMAIL_LIST"],
+      "email_on_retry": false,
+      "email_on_failure": true,
+      "retries": 1,
+      "retry_delay": 60
+    },
+    "ready_data_db": "postgres_default",
+    "ready_data_default_table": "bus_congestion_segments",
+    "raw_data_db": "postgres_default",
+    "raw_data_table": "",
+    "load_behavior": "replace"
+  },
+  "data_infos": {
+    "name_cn": "公車路況壅塞地圖",
+    "airflow_update_freq": "每 5 分鐘",
+    "source": "eta_snapshots CSV（由 bus_congestion_poll DAG 產生）",
+    "source_type": "internal CSV",
+    "source_dept": "臺北市交通局 / 新北市交通局",
+    "gis_format": "GeoJSON",
+    "output_coordinate": "EPSG:4326",
+    "is_geometry": 1,
+    "dataset_description": "以公車 ETA 預測誤差偵測全城路況壅塞（probe vehicle approach）",
+    "etl_description": "read CSV → analyze ETA errors → write GeoJSON + PostgreSQL",
+    "sensitivity": "public"
+  }
+}
