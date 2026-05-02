@@ -32,6 +32,8 @@ const (
 	ChatLogLimitAPIRequestsTimes       = 60
 	IssueLimitAPIRequestsTimes         = 20000
 	IssueLimitTotalRequestsTimes       = 20000
+	CommuteLimitAPIRequestsTimes       = 30
+	CommuteLimitTotalRequestsTimes     = 200
 	LimitRequestsDuration              = 60 * time.Second
 	
 

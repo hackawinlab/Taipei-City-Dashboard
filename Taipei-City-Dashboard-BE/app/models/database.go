@@ -49,9 +49,6 @@ func ConnectToDatabases(dbNames ...interface{}) {
 			case "MANAGER":
 				logs.FInfo("MANAGER Hostname: %s", global.PostgresManager.Host)
 				DBManager = ConnectToDatabase(global.PostgresManager)
-			case "HACKATHON":
-				logs.FInfo("HACKATHON Hostname: %s", global.PostgresHackathon.Host)
-				DBHackathon = ConnectToDatabase(global.PostgresHackathon)
 			default:
 				panic("Database not in connection list.")
 			}

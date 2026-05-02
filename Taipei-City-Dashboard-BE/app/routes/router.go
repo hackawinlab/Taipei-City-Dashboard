@@ -210,8 +210,8 @@ func configureAIRoutes() {
 
 func configureCommuteRoutes() {
 	commuteRoutes := RouterGroup.Group("/commute")
-	commuteRoutes.Use(middleware.LimitAPIRequests(30, global.LimitRequestsDuration))
-	commuteRoutes.Use(middleware.LimitTotalRequests(200, global.TokenExpirationDuration))
+	commuteRoutes.Use(middleware.LimitAPIRequests(global.CommuteLimitAPIRequestsTimes, global.LimitRequestsDuration))
+	commuteRoutes.Use(middleware.LimitTotalRequests(global.CommuteLimitTotalRequestsTimes, global.LimitRequestsDuration))
 	{
 		commuteRoutes.GET("/youbike/map", controllers.GetYouBikeMap)
 		commuteRoutes.GET("/youbike/shortage", controllers.GetYouBikeShortage)

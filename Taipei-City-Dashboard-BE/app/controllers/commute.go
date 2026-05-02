@@ -4,6 +4,7 @@ package controllers
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -191,7 +192,7 @@ ORDER BY 1, 2`
 		if totalStations > 0 {
 			pct = float64(emptyStations) / float64(totalStations) * 100
 			// round to 1 decimal
-			pct = float64(int(pct*10+0.5)) / 10
+			pct = math.Round(pct*10) / 10
 		}
 		if _, exists := cityHours[rowCity]; !exists {
 			cityOrder = append(cityOrder, rowCity)
