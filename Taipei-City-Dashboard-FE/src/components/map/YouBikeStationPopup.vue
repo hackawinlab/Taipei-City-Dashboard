@@ -148,7 +148,7 @@ onMounted(async () => {
 								text: `車位上限 ${capacity}`,
 								position: "center",
 								offsetX: 0,
-								offsetY: -2,
+								offsetY: 8,
 							},
 						},
 					],
@@ -203,7 +203,7 @@ onMounted(async () => {
 	font-size: var(--font-s, 12px);
 
 	&-header {
-		margin: 2px 4px 0 4px;
+		margin: 8px 4px 4px 4px;
 		text-align: center;
 
 		.station-name {
