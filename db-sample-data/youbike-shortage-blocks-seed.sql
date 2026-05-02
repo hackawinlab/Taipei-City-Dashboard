@@ -75,9 +75,9 @@ VALUES
 UPDATE dashboards
 SET components = ARRAY[
   (SELECT id FROM components WHERE index = 'youbike_timemap'),
-  (SELECT id FROM components WHERE index = 'youbike_availability'),
   (SELECT id FROM components WHERE index = 'youbike_persistence'),
   (SELECT id FROM components WHERE index = 'youbike_imbalance'),
+  (SELECT id FROM components WHERE index = 'youbike_availability'),
   (SELECT id FROM components WHERE index = 'bike_map'),
   (SELECT id FROM components WHERE index = 'bike_network')
 ]::integer[],
