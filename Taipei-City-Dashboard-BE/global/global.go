@@ -133,13 +133,13 @@ var (
 		MaxRetry:      getIntEnv("TWCC_MAX_RETRY", 2),
 		MaxConcurrent: getIntEnv("TWCC_MAX_CONCURRENT", 100),
 	}
-	
+
 	LMSession *ort.DynamicSession[int64, float32]
 	LMTokenizer *tokenizer.Tokenizer
 )
 
 func init() {
-	logs.FInfo(PostgresDashboard.Host)
+	logs.FInfo("%s", PostgresDashboard.Host)
 	
 }
 
@@ -160,6 +160,5 @@ func getIntEnv(key string, fallback int) int {
 	}
 	return fallback
 }
-
 
 

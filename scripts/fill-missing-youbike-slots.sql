@@ -19,7 +19,9 @@ BEGIN
             SELECT
                 city,
                 EXTRACT(hour FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int AS h,
-                (EXTRACT(minute FROM snapshot_at AT TIME ZONE 'Asia/Taipei') / 15)::int AS q
+                -- floor(minute/15): cast to int BEFORE dividing so 38 → q=2,
+                -- not q=3 (numeric/15 + ::int rounds half-up).
+                (EXTRACT(minute FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) AS q
             FROM youbike_snapshots
             GROUP BY 1, 2, 3
         ),
@@ -50,9 +52,9 @@ BEGIN
 
         INSERT INTO youbike_snapshots
             (station_uid, station_name, lat, lon, city,
-             available_bikes, total_docks, snapshot_at)
+             available_bikes, electric_bikes, total_docks, snapshot_at)
         SELECT station_uid, station_name, lat, lon, city,
-               available_bikes, total_docks, tgt_ts
+               available_bikes, electric_bikes, total_docks, tgt_ts
         FROM youbike_snapshots
         WHERE city = rec.city AND snapshot_at = src_ts
         ON CONFLICT (station_uid, snapshot_at) DO NOTHING;

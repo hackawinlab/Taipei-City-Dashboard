@@ -70,22 +70,30 @@ func GetYouBikeMap(c *gin.Context) {
 		return
 	}
 
+	// Pick the latest snapshot per station within the requested slot. Using
+	// the same DISTINCT ON LATEST pattern as GetYouBikeStationHourly so the
+	// icon color and the popup chart bar always agree at any given slot.
 	query := `
 SELECT station_uid, station_name, lat, lon, city,
-  ROUND((AVG(available_bikes::float / NULLIF(total_docks,0)) * 100)::numeric, 1) AS availability_pct,
-  ROUND(AVG(available_bikes)::numeric, 0)                                         AS avg_available,
-  MAX(total_docks)                                                                 AS total_docks
-FROM youbike_snapshots
-WHERE (city = $1 OR $1 = 'all')
-  AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2`
+       ROUND(available_bikes::numeric / NULLIF(total_docks,0) * 100, 1) AS availability_pct,
+       available_bikes                                                  AS avg_available,
+       total_docks
+FROM (
+  SELECT DISTINCT ON (station_uid)
+         station_uid, station_name, lat, lon, city,
+         available_bikes, total_docks
+  FROM youbike_snapshots
+  WHERE (city = $1 OR $1 = 'all')
+    AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2`
 	args := []interface{}{city, hour}
 	if quarter >= 0 {
 		query += `
-  AND (EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) = $3`
+    AND (EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) = $3`
 		args = append(args, quarter)
 	}
 	query += `
-GROUP BY station_uid, station_name, lat, lon, city
+  ORDER BY station_uid, snapshot_at DESC
+) s
 ORDER BY availability_pct ASC`
 
 	sqlDB, err := models.DBHackathon.DB()
@@ -119,7 +127,7 @@ ORDER BY availability_pct ASC`
 			lat, lon        float64
 			stationCity     string
 			availabilityPct sql.NullFloat64
-			avgAvailable    sql.NullFloat64
+			avgAvailable    sql.NullInt64
 			totalDocks      sql.NullInt64
 		)
 		if err := rows.Scan(&stationUID, &stationName, &lat, &lon, &stationCity, &availabilityPct, &avgAvailable, &totalDocks); err != nil {
@@ -137,7 +145,7 @@ ORDER BY availability_pct ASC`
 			"station_name":     stationName,
 			"city":             stationCity,
 			"availability_pct": availabilityPct.Float64,
-			"avg_available":    int64(avgAvailable.Float64),
+			"avg_available":    avgAvailable.Int64,
 			"total_docks":      totalDocks.Int64,
 		}
 		features = append(features, feat)
@@ -150,6 +158,120 @@ ORDER BY availability_pct ASC`
 	c.JSON(http.StatusOK, gin.H{
 		"type":     "FeatureCollection",
 		"features": features,
+	})
+}
+
+// GetYouBikeStationHourly handles GET /api/v1/commute/youbike/station/:uid/hourly
+// Returns 96-element arrays (one per 15-min slot, Asia/Taipei) of:
+//   - avg available_bikes (total bikes available, includes EVs)
+//   - avg electric_bikes  (electric subset of available)
+//   - max total_docks     (capacity)
+//
+// Slot index = hour*4 + (minute/15), so 0 = 00:00, 95 = 23:45.
+func GetYouBikeStationHourly(c *gin.Context) {
+	uid := c.Param("uid")
+	if uid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "missing station uid"})
+		return
+	}
+
+	if models.DBHackathon == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
+		return
+	}
+
+	const slotCount = 96
+
+	// One reading per 15-min slot: take the latest snapshot in each slot via
+	// DISTINCT ON. Avoids fractional values that AVG would produce when two
+	// CSV captures land in the same slot.
+	query := `
+SELECT DISTINCT ON (slot)
+       slot,
+       available_bikes::float AS avg_available,
+       electric_bikes::float  AS avg_electric,
+       total_docks            AS total_docks,
+       station_name,
+       city
+FROM (
+  SELECT (EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int * 4
+          + EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) AS slot,
+         snapshot_at, available_bikes, electric_bikes, total_docks, station_name, city
+  FROM youbike_snapshots
+  WHERE station_uid = $1
+) s
+ORDER BY slot, snapshot_at DESC`
+
+	sqlDB, err := models.DBHackathon.DB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("db error: %v", err)})
+		return
+	}
+
+	rows, err := sqlDB.Query(query, uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err)})
+		return
+	}
+	defer rows.Close()
+
+	available := make([]float64, slotCount)
+	electric := make([]float64, slotCount)
+	total := make([]int64, slotCount)
+	var stationName, stationCity string
+
+	for rows.Next() {
+		var (
+			slot       int
+			avgAvail   sql.NullFloat64
+			avgElec    sql.NullFloat64
+			totalDocks sql.NullInt64
+			name       sql.NullString
+			city       sql.NullString
+		)
+		if err := rows.Scan(&slot, &avgAvail, &avgElec, &totalDocks, &name, &city); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("scan error: %v", err)})
+			return
+		}
+		if slot >= 0 && slot < slotCount {
+			available[slot] = avgAvail.Float64
+			electric[slot] = avgElec.Float64
+			total[slot] = totalDocks.Int64
+		}
+		if name.Valid && stationName == "" {
+			stationName = name.String
+		}
+		if city.Valid && stationCity == "" {
+			stationCity = city.String
+		}
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("rows error: %v", err)})
+		return
+	}
+
+	if stationName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"message": "station not found"})
+		return
+	}
+
+	slots := make([]string, slotCount)
+	for s := 0; s < slotCount; s++ {
+		h := s / 4
+		m := (s % 4) * 15
+		slots[s] = fmt.Sprintf("%02d:%02d", h, m)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"station_uid":     uid,
+			"station_name":    stationName,
+			"city":            stationCity,
+			"slots":           slots,
+			"available_bikes": available,
+			"electric_bikes":  electric,
+			"total_docks":     total,
+		},
 	})
 }
 

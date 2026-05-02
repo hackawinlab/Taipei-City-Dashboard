@@ -51,6 +51,18 @@ func ChatWithTWCC(ctx context.Context, req AIChatRequest, options ...llms.CallOp
 	return session.run(ctx)
 }
 
+// GenerateWithTWCC runs a single model request without the chat tool-execution
+// loop. Component-level AI actions use this for structured intent parsing; the
+// caller still validates any returned actions before applying UI events.
+func GenerateWithTWCC(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) {
+	if err := aiSemaphore.Acquire(ctx, 1); err != nil {
+		return nil, fmt.Errorf("server too busy: %v", err)
+	}
+	defer aiSemaphore.Release(1)
+
+	return twccModel.GenerateContent(ctx, messages, options...)
+}
+
 func newSession(req AIChatRequest, options ...llms.CallOption) *aiSession {
 	s := &aiSession{
 		req:             req,
