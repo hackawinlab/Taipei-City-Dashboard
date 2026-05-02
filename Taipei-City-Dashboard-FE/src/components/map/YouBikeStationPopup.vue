@@ -102,7 +102,7 @@ const chartOptions = ref({
 		shared: true,
 		intersect: false,
 		x: { formatter: (_, { dataPointIndex }) => xCategories[dataPointIndex] },
-		y: { formatter: (v) => `${v.toFixed(1)} 輛` },
+		y: { formatter: (v) => `${Math.round(v)} 輛` },
 	},
 	annotations: { yaxis: [] },
 });
