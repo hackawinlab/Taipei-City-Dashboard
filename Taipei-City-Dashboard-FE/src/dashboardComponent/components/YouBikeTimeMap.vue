@@ -21,6 +21,7 @@ const cache = reactive({});
 
 let playInterval = null;
 let debounceTimer = null;
+let unmounted = false;
 
 const layerId = computed(() => {
 	if (!props.map_config || props.map_config.length === 0) return null;
@@ -38,13 +39,14 @@ async function fetchHour(hour) {
 		const res = await http.get(`/commute/youbike/map?city=all&hour=${hour}`);
 		cache[hour] = res.data;
 		mapStore.updateTimeMapSource(layerId.value, res.data);
-	} catch {
-		// silently ignore fetch errors during play/drag
+	} catch (e) {
+		console.warn("YouBikeTimeMap fetchHour failed", e);
 	}
 }
 
 async function prefetchAll() {
 	for (let h = 0; h < 24; h++) {
+		if (unmounted) return;
 		await fetchHour(h);
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
@@ -56,6 +58,7 @@ function togglePlay() {
 		playInterval = null;
 		playing.value = false;
 	} else {
+		if (playInterval) return; // guard rapid-toggle race
 		playing.value = true;
 		prefetchAll();
 		playInterval = setInterval(() => {
@@ -74,13 +77,17 @@ function pauseIfPlaying() {
 }
 
 onUnmounted(() => {
+	unmounted = true;
 	clearInterval(playInterval);
 	clearTimeout(debounceTimer);
 });
 </script>
 
 <template>
-  <div class="youbike-timemap">
+  <div
+    v-if="activeChart === 'YouBikeTimeMap'"
+    class="youbike-timemap"
+  >
     <!-- Header: hour label + play button -->
     <div class="youbike-timemap-header">
       <span class="hour-label">{{ String(currentHour).padStart(2, "0") }}:00</span>
@@ -101,6 +108,7 @@ onUnmounted(() => {
         max="23"
         step="1"
         @mousedown="pauseIfPlaying"
+        @touchstart="pauseIfPlaying"
       >
       <span>23:00</span>
     </div>
