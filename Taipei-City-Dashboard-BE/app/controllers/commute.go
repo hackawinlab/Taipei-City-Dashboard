@@ -70,22 +70,30 @@ func GetYouBikeMap(c *gin.Context) {
 		return
 	}
 
+	// Pick the latest snapshot per station within the requested slot. Using
+	// the same DISTINCT ON LATEST pattern as GetYouBikeStationHourly so the
+	// icon color and the popup chart bar always agree at any given slot.
 	query := `
 SELECT station_uid, station_name, lat, lon, city,
-  ROUND((AVG(available_bikes::float / NULLIF(total_docks,0)) * 100)::numeric, 1) AS availability_pct,
-  ROUND(AVG(available_bikes)::numeric, 0)                                         AS avg_available,
-  MAX(total_docks)                                                                 AS total_docks
-FROM youbike_snapshots
-WHERE (city = $1 OR $1 = 'all')
-  AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2`
+       ROUND(available_bikes::numeric / NULLIF(total_docks,0) * 100, 1) AS availability_pct,
+       available_bikes                                                  AS avg_available,
+       total_docks
+FROM (
+  SELECT DISTINCT ON (station_uid)
+         station_uid, station_name, lat, lon, city,
+         available_bikes, total_docks
+  FROM youbike_snapshots
+  WHERE (city = $1 OR $1 = 'all')
+    AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2`
 	args := []interface{}{city, hour}
 	if quarter >= 0 {
 		query += `
-  AND (EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) = $3`
+    AND (EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) = $3`
 		args = append(args, quarter)
 	}
 	query += `
-GROUP BY station_uid, station_name, lat, lon, city
+  ORDER BY station_uid, snapshot_at DESC
+) s
 ORDER BY availability_pct ASC`
 
 	sqlDB, err := models.DBHackathon.DB()
@@ -119,7 +127,7 @@ ORDER BY availability_pct ASC`
 			lat, lon        float64
 			stationCity     string
 			availabilityPct sql.NullFloat64
-			avgAvailable    sql.NullFloat64
+			avgAvailable    sql.NullInt64
 			totalDocks      sql.NullInt64
 		)
 		if err := rows.Scan(&stationUID, &stationName, &lat, &lon, &stationCity, &availabilityPct, &avgAvailable, &totalDocks); err != nil {
@@ -137,7 +145,7 @@ ORDER BY availability_pct ASC`
 			"station_name":     stationName,
 			"city":             stationCity,
 			"availability_pct": availabilityPct.Float64,
-			"avg_available":    int64(avgAvailable.Float64),
+			"avg_available":    avgAvailable.Int64,
 			"total_docks":      totalDocks.Int64,
 		}
 		features = append(features, feat)
