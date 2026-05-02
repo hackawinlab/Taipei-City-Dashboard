@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -63,7 +62,6 @@ type youbikeActionPlan struct {
 	HasLocation    bool
 	Clarification  string
 	IntentKind     string // "control" | "analytical" | "out_of_scope"
-	Source         string // "llm" | "fallback"
 	Followups      []ComponentAIFollowup
 }
 
@@ -121,7 +119,16 @@ func ComponentAIAction(c *gin.Context) {
 
 	plan, ok := parseYouBikeActionPlanWithLLM(c.Request.Context(), message, input.ComponentState)
 	if !ok {
-		plan = parseYouBikeActionPlanDeterministic(message)
+		c.JSON(http.StatusOK, ComponentAIActionResponse{
+			SchemaVersion: componentAIActionSchemaVersion,
+			ComponentID:   componentID,
+			Mode:          "clarify",
+			Summary:       "AI 服務暫時無法回應，請稍後再試或換個說法。",
+			UIEvents:      []ComponentAIUIEvent{},
+			Insights:      []interface{}{},
+			Followups:     defaultYouBikeFollowups(),
+		})
+		return
 	}
 
 	events := make([]ComponentAIUIEvent, 0, 2)
@@ -288,91 +295,6 @@ func normalizeComponentID(componentID string) string {
 	}
 }
 
-func parseYouBikeTimeIntent(message string) (youbikeTimeIntent, bool) {
-	normalized := strings.ToLower(strings.TrimSpace(message))
-	if normalized == "" {
-		return youbikeTimeIntent{}, false
-	}
-
-	if hour, minute, ok := parseExplicitTime(normalized); ok {
-		return buildYouBikeTimeIntent(hour, minute, "指定時間"), true
-	}
-
-	presets := []struct {
-		Keywords []string
-		Hour     int
-		Minute   int
-		Reason   string
-	}{
-		{[]string{"晚高峰", "下班", "傍晚尖峰", "晚尖峰", "evening"}, 18, 0, "晚高峰"},
-		{[]string{"早高峰", "上班", "上午尖峰", "早尖峰", "morning"}, 8, 0, "早高峰"},
-		{[]string{"中午", "午餐", "noon"}, 12, 0, "中午"},
-		{[]string{"下午"}, 15, 0, "下午"},
-		{[]string{"晚上"}, 19, 0, "晚上"},
-		{[]string{"凌晨"}, 0, 0, "凌晨"},
-	}
-
-	for _, preset := range presets {
-		for _, keyword := range preset.Keywords {
-			if strings.Contains(normalized, keyword) {
-				return buildYouBikeTimeIntent(preset.Hour, preset.Minute, preset.Reason), true
-			}
-		}
-	}
-
-	return youbikeTimeIntent{}, false
-}
-
-func parseExplicitTime(message string) (int, int, bool) {
-	colonRe := regexp.MustCompile(`(\d{1,2})\s*[:：]\s*(\d{1,2})`)
-	if matches := colonRe.FindStringSubmatch(message); len(matches) == 3 {
-		hour, _ := strconv.Atoi(matches[1])
-		minute, _ := strconv.Atoi(matches[2])
-		if validHourMinute(hour, minute) {
-			return hour, minute, true
-		}
-	}
-
-	hourRe := regexp.MustCompile(`(\d{1,2})\s*(點|时|時)半?`)
-	if matches := hourRe.FindStringSubmatch(message); len(matches) >= 2 {
-		hour, _ := strconv.Atoi(matches[1])
-		minute := 0
-		if strings.Contains(matches[0], "半") {
-			minute = 30
-		}
-		if strings.Contains(message, "下午") || strings.Contains(message, "晚上") || strings.Contains(message, "晚間") {
-			if hour >= 1 && hour <= 11 {
-				hour += 12
-			}
-		}
-		if validHourMinute(hour, minute) {
-			return hour, minute, true
-		}
-	}
-
-	chineseHours := map[string]int{
-		"零": 0, "〇": 0, "一": 1, "二": 2, "兩": 2, "三": 3, "四": 4,
-		"五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
-		"十一": 11, "十二": 12,
-	}
-	for textHour, hour := range chineseHours {
-		if strings.Contains(message, textHour+"點") || strings.Contains(message, textHour+"時") {
-			minute := 0
-			if strings.Contains(message, textHour+"點半") || strings.Contains(message, textHour+"時半") {
-				minute = 30
-			}
-			if strings.Contains(message, "下午") || strings.Contains(message, "晚上") || strings.Contains(message, "晚間") {
-				if hour >= 1 && hour <= 11 {
-					hour += 12
-				}
-			}
-			return hour, minute, true
-		}
-	}
-
-	return 0, 0, false
-}
-
 func validHourMinute(hour int, minute int) bool {
 	return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59
 }
@@ -398,36 +320,6 @@ func twoDigit(value int) string {
 		return "0" + strconv.Itoa(value)
 	}
 	return strconv.Itoa(value)
-}
-
-func parseYouBikeActionPlanDeterministic(message string) youbikeActionPlan {
-	plan := youbikeActionPlan{
-		IntentKind: "control",
-		Source:     "fallback",
-	}
-	if timeIntent, ok := parseYouBikeTimeIntent(message); ok {
-		plan.TimeIntent = timeIntent
-		plan.HasTime = true
-	}
-	if locationIntent, ok := youbike.ResolveLocation(extractLocationGuess(message)); ok {
-		plan.LocationIntent = locationIntent
-		plan.HasLocation = true
-	}
-	return plan
-}
-
-// extractLocationGuess strips obvious time keywords from the raw message
-// so the deterministic fallback's tier-2 station LIKE doesn't get
-// poisoned by phrases like "晚高峰". Only used in the no-LLM path.
-func extractLocationGuess(message string) string {
-	cleaned := message
-	for _, kw := range []string{"晚高峰", "早高峰", "下班", "上班", "中午", "午餐", "凌晨", "晚上", "下午", "傍晚尖峰", "晚尖峰", "上午尖峰", "早尖峰", "evening", "morning", "noon"} {
-		cleaned = strings.ReplaceAll(cleaned, kw, " ")
-	}
-	cleaned = regexp.MustCompile(`\d+\s*[:：]\s*\d+`).ReplaceAllString(cleaned, " ")
-	cleaned = regexp.MustCompile(`\d+\s*(點|時)半?`).ReplaceAllString(cleaned, " ")
-	cleaned = regexp.MustCompile(`(看|看看|幫我看|幫我|移到|移動到|去|前往|切到|切換到|跳到)`).ReplaceAllString(cleaned, " ")
-	return strings.TrimSpace(cleaned)
 }
 
 func parseYouBikeActionPlanWithLLM(ctx context.Context, message string, componentState map[string]interface{}) (youbikeActionPlan, bool) {
@@ -476,7 +368,6 @@ func parseYouBikeActionPlanWithLLM(ctx context.Context, message string, componen
 	plan := youbikeActionPlan{
 		Clarification: strings.TrimSpace(intent.Clarification),
 		IntentKind:    strings.TrimSpace(intent.IntentKind),
-		Source:        "llm",
 		Followups:     stringFollowupsToObjects(intent.Followups),
 	}
 
@@ -519,21 +410,6 @@ func parseYouBikeActionPlanWithLLM(ctx context.Context, message string, componen
 			} else if plan.Clarification == "" {
 				plan.Clarification = unknownLocationMessage(query)
 			}
-		}
-	}
-
-	// Safety net: if the LLM returned no usable intents but the raw message
-	// matches a deterministic time/location, recover instead of dropping.
-	if !plan.HasTime {
-		if timeIntent, ok := parseYouBikeTimeIntent(message); ok {
-			plan.TimeIntent = timeIntent
-			plan.HasTime = true
-		}
-	}
-	if !plan.HasLocation && plan.Clarification == "" {
-		if locationIntent, ok := youbike.ResolveLocation(extractLocationGuess(message)); ok {
-			plan.LocationIntent = locationIntent
-			plan.HasLocation = true
 		}
 	}
 

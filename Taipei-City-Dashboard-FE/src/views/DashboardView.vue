@@ -73,7 +73,7 @@ function handleMoreInfo(item) {
 <template>
   <!-- 1. If the dashboard is map-layers -->
   <div
-    v-if="contentStore.currentDashboard.index?.includes('map-layers')"
+    v-if="contentStore.isMapLayersDashboard"
     class="dashboard"
   >
     <DashboardComponent

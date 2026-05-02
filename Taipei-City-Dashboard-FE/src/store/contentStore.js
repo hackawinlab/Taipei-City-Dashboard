@@ -82,7 +82,29 @@ export const useContentStore = defineStore("content", {
 			"metro_br_line",
 		],
 	}),
-	getters: {},
+	getters: {
+		isMapLayersDashboard() {
+			return !!this.currentDashboard.index?.includes("map-layers");
+		},
+		// Components on the map sidebar that have spatial data (basic layers + theme components with map_config),
+		// city normalized to dashboard city when missing, deduped by (index, city).
+		availableMapLayerComponents() {
+			const dashCity = this.currentDashboard?.city;
+			const merged = [
+				...(this.allMapLayers || []),
+				...((this.currentDashboard?.components || []).filter((c) => c.map_config?.[0])),
+			];
+			const seen = new Set();
+			return merged
+				.map((c) => ({ ...c, city: c.city || dashCity }))
+				.filter((c) => {
+					const key = `${c.index}:${c.city}`;
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+		},
+	},
 	actions: {
 		setComponentData(index, component) {
 			this.currentDashboard.components[index] = component;
@@ -723,7 +745,7 @@ export const useContentStore = defineStore("content", {
 			}
 			if (
 				this.currentDashboard.mode === "/mapview" &&
-				!this.currentDashboard.index?.includes("map-layers")
+				!this.isMapLayersDashboard
 			) {
 				// In /mapview, map layer components are also present and need to be fetched
 				try {
