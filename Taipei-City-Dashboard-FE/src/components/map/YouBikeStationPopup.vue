@@ -221,7 +221,7 @@ onMounted(async () => {
 		<VueApexCharts
 			v-else
 			type="bar"
-			height="240"
+			height="200"
 			width="100%"
 			:options="chartOptions"
 			:series="series"
