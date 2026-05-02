@@ -90,8 +90,10 @@ const chartOptions = ref({
 	},
 	yaxis: {
 		labels: {
+			maxWidth: props.chart_config.label_max_width ?? 80,
 			formatter: function (value) {
-				return value.length > 7 ? value.slice(0, 6) + "..." : value;
+				const limit = props.chart_config.label_max_length ?? 7;
+				return value.length > limit ? value.slice(0, limit - 1) + "…" : value;
 			},
 		},
 	},

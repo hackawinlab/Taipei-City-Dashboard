@@ -29,6 +29,7 @@ import IconPercentChart from "./components/IconPercentChart.vue";
 import IndicatorChart from "./components/IndicatorChart.vue";
 import TextUnitChart from "./components/TextUnitChart.vue";
 import YouBikeTimeMap from "./components/YouBikeTimeMap.vue";
+import ScatterChart from "./components/ScatterChart.vue";
 
 import MapLegendSvg from "./assets/chart/MapLegend.svg";
 import DistrictChartSvg from "./assets/chart/DistrictChart.svg";
@@ -225,6 +226,8 @@ function returnChartComponent(name, svg) {
 		return svg ? TextUnitChartSvg : TextUnitChart;
 	case "YouBikeTimeMap":
 		return svg ? MapLegendSvg : YouBikeTimeMap;
+	case "ScatterChart":
+		return svg ? HeatmapChartSvg : ScatterChart;
 	default:
 		return svg ? MapLegendSvg : MapLegend;
 	}
