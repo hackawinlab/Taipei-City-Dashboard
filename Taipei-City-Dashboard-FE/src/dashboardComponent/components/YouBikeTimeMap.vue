@@ -22,6 +22,21 @@ const currentSlot = ref(0);
 const playing = ref(false);
 const cityFilter = ref("all"); // "all" = 雙北, "Taipei" = 台北市
 const cache = reactive({});
+const currentFeatures = ref([]);
+
+const stats = computed(() => {
+	let empty = 0;
+	let full = 0;
+	for (const feat of currentFeatures.value) {
+		const props = feat.properties || {};
+		const avail = Number(props.avg_available);
+		const total = Number(props.total_docks);
+		if (!Number.isFinite(avail) || !Number.isFinite(total) || total <= 0) continue;
+		if (avail <= 0) empty++;
+		else if (avail >= total) full++;
+	}
+	return { empty, full, total: currentFeatures.value.length };
+});
 
 let playInterval = null;
 let debounceTimer = null;
@@ -48,6 +63,9 @@ async function fetchSlot(slot) {
 	const key = cacheKey(slot);
 	if (cache[key]) {
 		mapStore.updateTimeMapSource(layerId.value, cache[key]);
+		if (slot === currentSlot.value) {
+			currentFeatures.value = cache[key].features || [];
+		}
 		return;
 	}
 	const hour = Math.floor(slot / SLOTS_PER_HOUR);
@@ -58,6 +76,9 @@ async function fetchSlot(slot) {
 		);
 		cache[key] = res.data;
 		mapStore.updateTimeMapSource(layerId.value, res.data);
+		if (slot === currentSlot.value) {
+			currentFeatures.value = res.data.features || [];
+		}
 	} catch (e) {
 		console.warn("YouBikeTimeMap fetchSlot failed", e);
 	}
@@ -261,12 +282,12 @@ function drawAIHighlight(center, radiusMeters, verdict) {
 
 defineExpose({ applyAIEvent, getComponentState, clearAIHighlight });
 
-// Trigger an initial fetch so the map source matches the slider's starting
-// position (00:00). Without this, the layer is loaded by mapStore using the
-// current real hour while the slider sits at slot 0, so the bikes shown
-// don't match what the slider says — and stay that way until the user
-// touches the slider. Wait until the layer source exists before fetching.
+// Fetch slot 0 immediately so the stats panel populates as soon as the
+// component mounts, even on tabs with no map context. Then wait for the
+// map source to appear and re-apply (cache hit) so the visual layer also
+// matches the slider's starting position.
 onMounted(async () => {
+	fetchSlot(currentSlot.value);
 	for (let i = 0; i < 30; i++) {
 		if (
 			layerId.value &&
@@ -329,6 +350,21 @@ onUnmounted(() => {
         @touchstart="pauseIfPlaying"
       >
       <span>23:45</span>
+    </div>
+    <!-- Per-slot station stats -->
+    <div class="youbike-timemap-stats">
+      <div class="stat-row">
+        <span class="stat-dot empty" />
+        <span class="stat-label">無車站點</span>
+        <span class="stat-value">{{ stats.empty }}</span>
+        <span class="stat-of">/ {{ stats.total }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-dot full" />
+        <span class="stat-label">滿車站點</span>
+        <span class="stat-value">{{ stats.full }}</span>
+        <span class="stat-of">/ {{ stats.total }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -397,6 +433,51 @@ onUnmounted(() => {
             cursor: pointer;
         }
         span { font-size: var(--font-s); color: var(--color-complement-text); }
+    }
+
+    &-stats {
+        display: flex;
+        flex-direction: column;
+        row-gap: 12px;
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        background: var(--color-component-background);
+
+        .stat-row {
+            display: flex;
+            align-items: center;
+            column-gap: 8px;
+            font-size: var(--font-s);
+            line-height: 1;
+
+            .stat-dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                flex-shrink: 0;
+
+                &.empty { background: #ff6b6b; }
+                &.full { background: #4dabf7; }
+            }
+
+            .stat-label {
+                color: var(--color-complement-text);
+                flex: 1;
+            }
+
+            .stat-value {
+                font-weight: 700;
+                color: var(--color-normal-text);
+                font-variant-numeric: tabular-nums;
+            }
+
+            .stat-of {
+                color: var(--color-complement-text);
+                font-variant-numeric: tabular-nums;
+            }
+        }
     }
 }
 </style>
