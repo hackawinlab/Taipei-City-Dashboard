@@ -101,8 +101,36 @@ const chartOptions = ref({
 		theme: "dark",
 		shared: true,
 		intersect: false,
-		x: { formatter: (_, { dataPointIndex }) => xCategories[dataPointIndex] },
-		y: { formatter: (v) => `${Math.round(v)} 輛` },
+		// Custom HTML so the rows render in a 4-column grid (marker, label,
+		// value, unit). Default ApexCharts uses flowing text per row, so
+		// "1.0 輛" and "22.0 輛" don't line up between series. Styles are
+		// inline because ApexCharts mounts the tooltip outside the Vue scope.
+		custom: ({ dataPointIndex, w }) => {
+			const time = xCategories[dataPointIndex] ?? "";
+			const wrap =
+				"display:grid;grid-template-columns:10px auto 1fr auto;column-gap:6px;align-items:center;padding:6px 8px;font-size:12px;color:#e5e7eb;line-height:1.5;";
+			const titleStyle =
+				"grid-column:1/-1;color:#9ca3af;margin-bottom:4px;";
+			const markerStyle =
+				"width:8px;height:8px;border-radius:2px;display:inline-block;";
+			const valueStyle =
+				"text-align:right;font-variant-numeric:tabular-nums;";
+			const rows = w.config.series
+				.map((s, i) => {
+					const v = (s.data?.[dataPointIndex] ?? 0).toFixed(1);
+					const color = w.config.colors?.[i] ?? "#888";
+					return `
+						<span style="${markerStyle}background:${color};"></span>
+						<span>${s.name}</span>
+						<span style="${valueStyle}">${v}</span>
+						<span>輛</span>`;
+				})
+				.join("");
+			return `<div style="${wrap}">
+				<div style="${titleStyle}">${time}</div>
+				${rows}
+			</div>`;
+		},
 	},
 	annotations: { yaxis: [] },
 });
