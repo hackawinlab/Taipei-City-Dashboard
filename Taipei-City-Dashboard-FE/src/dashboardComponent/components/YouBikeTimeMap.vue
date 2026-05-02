@@ -1,6 +1,6 @@
 <!-- Developed by Taipei Urban Intelligence Center 2023-2024-->
 <script setup>
-import { ref, computed, watch, onUnmounted } from "vue";
+import { ref, reactive, computed, watch, onUnmounted } from "vue";
 import { useMapStore } from "../../store/mapStore";
 import http from "../../router/axios";
 
@@ -17,7 +17,7 @@ const mapStore = useMapStore();
 
 const currentHour = ref(new Date().getHours());
 const playing = ref(false);
-const cache = ref({});
+const cache = reactive({});
 
 let playInterval = null;
 let debounceTimer = null;
@@ -30,13 +30,13 @@ const layerId = computed(() => {
 
 async function fetchHour(hour) {
 	if (!layerId.value) return;
-	if (cache.value[hour]) {
-		mapStore.updateTimeMapSource(layerId.value, cache.value[hour]);
+	if (cache[hour]) {
+		mapStore.updateTimeMapSource(layerId.value, cache[hour]);
 		return;
 	}
 	try {
 		const res = await http.get(`/commute/youbike/map?city=all&hour=${hour}`);
-		cache.value[hour] = res.data;
+		cache[hour] = res.data;
 		mapStore.updateTimeMapSource(layerId.value, res.data);
 	} catch {
 		// silently ignore fetch errors during play/drag
@@ -45,10 +45,8 @@ async function fetchHour(hour) {
 
 async function prefetchAll() {
 	for (let h = 0; h < 24; h++) {
-		if (!cache.value[h]) {
-			await fetchHour(h);
-			await new Promise((resolve) => setTimeout(resolve, 100));
-		}
+		await fetchHour(h);
+		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
 }
 
@@ -70,6 +68,10 @@ watch(currentHour, (h) => {
 	clearTimeout(debounceTimer);
 	debounceTimer = setTimeout(() => fetchHour(h), 200);
 });
+
+function pauseIfPlaying() {
+	if (playing.value) togglePlay();
+}
 
 onUnmounted(() => {
 	clearInterval(playInterval);
@@ -98,7 +100,7 @@ onUnmounted(() => {
         min="0"
         max="23"
         step="1"
-        @mousedown="if (playing) togglePlay()"
+        @mousedown="pauseIfPlaying"
       >
       <span>23:00</span>
     </div>
