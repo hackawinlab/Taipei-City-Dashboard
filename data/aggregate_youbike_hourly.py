@@ -464,29 +464,6 @@ def write_frontend_json(
         timeline_empty.append({"name": city, "data": empty_pts})
         timeline_low.append({"name": city, "data": low_pts})
 
-    # 4. 散布資料：每小時每站的 lat/lon + fill_ratio + total_docks（給 ScatterChart 用）
-    df_geo = by_station.copy()
-    df_geo["hour_label"] = pd.to_datetime(df_geo["hour"]).dt.strftime("%Y-%m-%d %H:%M")
-    scatter: dict[str, dict[str, list[dict]]] = {}
-    for hour in hours:
-        scatter[hour] = {}
-        sub_hour = df_geo[df_geo["hour_label"] == hour]
-        for city in cities:
-            view = sub_hour if city == "All" else sub_hour[sub_hour["city"] == city]
-            scatter[hour][city] = [
-                {
-                    "name": _strip_prefix(r.station_name),
-                    "city": r.city,
-                    "lat": float(r.lat),
-                    "lon": float(r.lon),
-                    "fill_ratio": float(r.fill_ratio) if pd.notna(r.fill_ratio) else 0.0,
-                    "total_docks": int(r.total_docks),
-                    "available_bikes": float(r.avg_available_bikes),
-                }
-                for r in view.itertuples(index=False)
-            ]
-
-
     payload = {
         "generated_at": pd.Timestamp.now().isoformat(timespec="seconds"),
         "hours": hours,
@@ -498,7 +475,6 @@ def write_frontend_json(
         "heatmap": heatmap,
         "timeline_empty": timeline_empty,
         "timeline_low": timeline_low,
-        "scatter": scatter,
         "imbalance": imbalance,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
