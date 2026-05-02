@@ -32,6 +32,7 @@ import (
 func StartApplication() {
 	// 1. Connect to postgreSQL and Redis
 	models.ConnectToDatabases("MANAGER", "DASHBOARD")
+	models.ConnectToHackathonDB()
 	cache.ConnectToRedis()
 	initial.InitCronJobs()
 
@@ -73,7 +74,7 @@ func StartApplication() {
 	logs.FInfo("Server on %v stopped", addr)
 
 	// If the server stops, close the database connections
-	models.CloseConnects("MANAGER", "DASHBOARD")
+	models.CloseConnects("MANAGER", "DASHBOARD", "HACKATHON")
 	cache.CloseConnect()
 
 	// If the server stops, close the lm session and environment
