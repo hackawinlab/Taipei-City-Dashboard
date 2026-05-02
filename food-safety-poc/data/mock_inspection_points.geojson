@@ -1,0 +1,245 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5319, 25.0478] },
+      "properties": {
+        "business_name": "好味道餐廳",
+        "address": "台北市中山區南京東路二段88號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "taipei",
+        "district": "中山區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5435, 25.0412] },
+      "properties": {
+        "business_name": "幸福小廚房",
+        "address": "台北市大安區忠孝東路四段216號",
+        "violation_count": 2,
+        "inspection_result": "不合格",
+        "city": "taipei",
+        "district": "大安區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5638, 25.0414] },
+      "properties": {
+        "business_name": "信義美食街便當",
+        "address": "台北市信義區松高路12號",
+        "violation_count": 1,
+        "inspection_result": "不合格",
+        "city": "taipei",
+        "district": "信義區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5193, 25.0446] },
+      "properties": {
+        "business_name": "老台北麵食館",
+        "address": "台北市中正區重慶南路一段55號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "taipei",
+        "district": "中正區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5526, 25.0498] },
+      "properties": {
+        "business_name": "松山快炒店",
+        "address": "台北市松山區八德路三段300號",
+        "violation_count": 3,
+        "inspection_result": "不合格",
+        "city": "taipei",
+        "district": "松山區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5280, 25.0540] },
+      "properties": {
+        "business_name": "大同豆花甜品",
+        "address": "台北市大同區迪化街一段156號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "taipei",
+        "district": "大同區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5014, 25.0380] },
+      "properties": {
+        "business_name": "文山有機農場直送",
+        "address": "台北市文山區木柵路三段88號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "taipei",
+        "district": "文山區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5087, 25.0712] },
+      "properties": {
+        "business_name": "士林夜市蚵仔煎",
+        "address": "台北市士林區基河路101號",
+        "violation_count": 1,
+        "inspection_result": "不合格",
+        "city": "taipei",
+        "district": "士林區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5152, 25.0783] },
+      "properties": {
+        "business_name": "天母日式料理",
+        "address": "台北市士林區天母東路25號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "taipei",
+        "district": "士林區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.4930, 25.0622] },
+      "properties": {
+        "business_name": "北投溫泉御膳房",
+        "address": "台北市北投區中山路5號",
+        "violation_count": 5,
+        "inspection_result": "不合格",
+        "city": "taipei",
+        "district": "北投區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.4682, 24.9878] },
+      "properties": {
+        "business_name": "板橋老街牛肉麵",
+        "address": "新北市板橋區文化路一段188號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "newtaipei",
+        "district": "板橋區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.6624, 25.0122] },
+      "properties": {
+        "business_name": "瑞芳基隆小吃",
+        "address": "新北市瑞芳區明燈路二段36號",
+        "violation_count": 2,
+        "inspection_result": "不合格",
+        "city": "newtaipei",
+        "district": "瑞芳區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.4638, 24.9952] },
+      "properties": {
+        "business_name": "中和清真認證餐廳",
+        "address": "新北市中和區景平路580號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "newtaipei",
+        "district": "中和區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5490, 24.9534] },
+      "properties": {
+        "business_name": "永和豆漿大王",
+        "address": "新北市永和區永和路二段6號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "newtaipei",
+        "district": "永和區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.4788, 24.9730] },
+      "properties": {
+        "business_name": "新莊廟口熱炒",
+        "address": "新北市新莊區新莊路301號",
+        "violation_count": 4,
+        "inspection_result": "不合格",
+        "city": "newtaipei",
+        "district": "新莊區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.4615, 24.9688] },
+      "properties": {
+        "business_name": "三重夜市串燒攤",
+        "address": "新北市三重區重新路四段155號",
+        "violation_count": 1,
+        "inspection_result": "不合格",
+        "city": "newtaipei",
+        "district": "三重區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.5005, 24.9615] },
+      "properties": {
+        "business_name": "中永和有機蔬食",
+        "address": "新北市中和區安樂路12號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "newtaipei",
+        "district": "中和區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.6520, 25.0201] },
+      "properties": {
+        "business_name": "汐止便當外送廚房",
+        "address": "新北市汐止區新台五路一段236號",
+        "violation_count": 2,
+        "inspection_result": "不合格",
+        "city": "newtaipei",
+        "district": "汐止區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.4603, 25.0168] },
+      "properties": {
+        "business_name": "蘆洲傳統市場熟食",
+        "address": "新北市蘆洲區集賢路333號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "newtaipei",
+        "district": "蘆洲區"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [121.4835, 24.9801] },
+      "properties": {
+        "business_name": "新莊素食館",
+        "address": "新北市新莊區中正路508號",
+        "violation_count": 0,
+        "inspection_result": "合格",
+        "city": "newtaipei",
+        "district": "新莊區"
+      }
+    }
+  ]
+}

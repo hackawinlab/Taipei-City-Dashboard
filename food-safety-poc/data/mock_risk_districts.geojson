@@ -1,0 +1,115 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [121.5100, 25.0400],
+          [121.5350, 25.0400],
+          [121.5350, 25.0560],
+          [121.5100, 25.0560],
+          [121.5100, 25.0400]
+        ]]
+      },
+      "properties": {
+        "district": "中山區",
+        "city": "taipei",
+        "high_risk": 3,
+        "medium_risk": 7,
+        "low_risk": 15,
+        "risk_level": "中風險",
+        "violation_rate": 0.18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [121.5300, 25.0260],
+          [121.5600, 25.0260],
+          [121.5600, 25.0480],
+          [121.5300, 25.0480],
+          [121.5300, 25.0260]
+        ]]
+      },
+      "properties": {
+        "district": "大安區",
+        "city": "taipei",
+        "high_risk": 5,
+        "medium_risk": 12,
+        "low_risk": 28,
+        "risk_level": "高風險",
+        "violation_rate": 0.32
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [121.5500, 25.0280],
+          [121.5800, 25.0280],
+          [121.5800, 25.0520],
+          [121.5500, 25.0520],
+          [121.5500, 25.0280]
+        ]]
+      },
+      "properties": {
+        "district": "信義區",
+        "city": "taipei",
+        "high_risk": 2,
+        "medium_risk": 8,
+        "low_risk": 22,
+        "risk_level": "中風險",
+        "violation_rate": 0.15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [121.4980, 25.0350],
+          [121.5250, 25.0350],
+          [121.5250, 25.0530],
+          [121.4980, 25.0530],
+          [121.4980, 25.0350]
+        ]]
+      },
+      "properties": {
+        "district": "中正區",
+        "city": "taipei",
+        "high_risk": 1,
+        "medium_risk": 5,
+        "low_risk": 20,
+        "risk_level": "低風險",
+        "violation_rate": 0.07
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [121.5380, 25.0420],
+          [121.5700, 25.0420],
+          [121.5700, 25.0600],
+          [121.5380, 25.0600],
+          [121.5380, 25.0420]
+        ]]
+      },
+      "properties": {
+        "district": "松山區",
+        "city": "taipei",
+        "high_risk": 4,
+        "medium_risk": 9,
+        "low_risk": 18,
+        "risk_level": "高風險",
+        "violation_rate": 0.28
+      }
+    }
+  ]
+}

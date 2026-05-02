@@ -28,6 +28,11 @@ import BarChartWithGoal from "./components/BarChartWithGoal.vue";
 import IconPercentChart from "./components/IconPercentChart.vue";
 import IndicatorChart from "./components/IndicatorChart.vue";
 import TextUnitChart from "./components/TextUnitChart.vue";
+// Food Safety Early Warning PoC
+import FoodSafetyAlertMap from "./components/FoodSafetyAlertMap.vue";
+import FoodSafetyRiskLayer from "./components/FoodSafetyRiskLayer.vue";
+import FoodSafetyTrend from "./components/FoodSafetyTrend.vue";
+import FoodSafetyViolationSummary from "./components/FoodSafetyViolationSummary.vue";
 
 import MapLegendSvg from "./assets/chart/MapLegend.svg";
 import DistrictChartSvg from "./assets/chart/DistrictChart.svg";
@@ -222,6 +227,15 @@ function returnChartComponent(name, svg) {
 		return svg ? IndicatorChartSvg : IndicatorChart;
 	case "TextUnitChart":
 		return svg ? TextUnitChartSvg : TextUnitChart;
+	// Food Safety Early Warning PoC
+	case "FoodSafetyAlertMap":
+		return svg ? MapLegendSvg : FoodSafetyAlertMap;
+	case "FoodSafetyRiskLayer":
+		return svg ? MapLegendSvg : FoodSafetyRiskLayer;
+	case "FoodSafetyTrend":
+		return svg ? TimelineSeparateChartSvg : FoodSafetyTrend;
+	case "FoodSafetyViolationSummary":
+		return svg ? ColumnChartSvg : FoodSafetyViolationSummary;
 	default:
 		return svg ? MapLegendSvg : MapLegend;
 	}
