@@ -48,7 +48,9 @@ const chartOptions = ref({
 		show: true,
 		borderColor: "rgba(255,255,255,0.08)",
 		strokeDashArray: 3,
-		padding: { top: -10, bottom: -8, left: 10, right: 10 },
+		// Top: room for the "車位上限" annotation label that sits above the bars.
+		// Bottom: 0 to keep the popup compact between the x-axis title and tail.
+		padding: { top: 12, bottom: 0, left: 10, right: 10 },
 		xaxis: { lines: { show: false } },
 	},
 	xaxis: {
@@ -185,7 +187,7 @@ onMounted(async () => {
 		<VueApexCharts
 			v-else
 			type="bar"
-			height="180"
+			height="200"
 			width="100%"
 			:options="chartOptions"
 			:series="series"
