@@ -203,7 +203,7 @@ onMounted(async () => {
 	font-size: var(--font-s, 12px);
 
 	&-header {
-		margin: 6px 4px 8px 12px;
+		margin: 2px 4px 0 12px;
 
 		.station-name {
 			font-weight: 600;
