@@ -457,17 +457,19 @@ export const useMapStore = defineStore("map", {
 		async fetchApiGeoJson(map_config) {
 			try {
 				const now = new Date();
-				const taipeiHour = parseInt(
-					now.toLocaleString("en-US", {
-						timeZone: "Asia/Taipei",
-						hour: "numeric",
-						hour12: false,
-					}),
-					10
-				);
+				const taipeiHour =
+					parseInt(
+						now.toLocaleString("en-US", {
+							timeZone: "Asia/Taipei",
+							hour: "numeric",
+							hour12: false,
+						}),
+						10
+					) % 24;
 				const res = await axios.get(
 					`${map_config.api_endpoint}?city=all&hour=${taipeiHour}`
 				);
+				if (this.map.getSource(`${map_config.layerId}-source`)) return;
 				this.map.addSource(`${map_config.layerId}-source`, {
 					type: "geojson",
 					data: res.data,
@@ -475,7 +477,6 @@ export const useMapStore = defineStore("map", {
 				this.addMapLayer(map_config);
 			} catch (e) {
 				console.error("fetchApiGeoJson failed", e);
-			} finally {
 				this.loadingLayers = this.loadingLayers.filter(
 					(el) => el !== map_config.layerId
 				);
@@ -2593,6 +2594,7 @@ export const useMapStore = defineStore("map", {
 
 		/* Update a GeoJSON source with new data (e.g. time slider) */
 		updateTimeMapSource(layerId, geojsonData) {
+			if (!this.map) return;
 			const source = this.map.getSource(`${layerId}-source`);
 			if (source) source.setData(geojsonData);
 		},
