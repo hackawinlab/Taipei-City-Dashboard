@@ -146,14 +146,24 @@ watch(
 </script>
 
 <template>
-  <div v-if="activeChart === 'TimelineSeparateChart'">
+  <div
+    v-if="activeChart === 'TimelineSeparateChart'"
+    :class="{ 'chart-fit': props.chart_config?.fit }"
+  >
     <VueApexCharts
       width="100%"
-      height="260px"
+      :height="props.chart_config?.fit ? '100%' : '260px'"
       type="line"
       :options="chartOptions"
       :series="localSeries"
     />
   </div>
 </template>
+
+<style scoped lang="scss">
+.chart-fit {
+	height: 100%;
+	overflow: hidden;
+}
+</style>
 

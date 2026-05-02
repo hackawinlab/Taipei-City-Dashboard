@@ -237,7 +237,7 @@ function handleDataSelection(_e, _chartContext, config) {
 <template>
   <div
     v-if="activeChart === 'HeatmapChart'"
-    class="heatmapchart"
+    :class="['heatmapchart', { 'heatmapchart-fit': chart_config?.fit }]"
   >
     <div
       v-if="showSummary"
@@ -248,7 +248,7 @@ function handleDataSelection(_e, _chartContext, config) {
     </div>
     <VueApexCharts
       width="100%"
-      height="360px"
+      :height="chart_config?.fit ? '100%' : '360px'"
       type="heatmap"
       :options="chartOptions"
       :series="series"
@@ -259,6 +259,11 @@ function handleDataSelection(_e, _chartContext, config) {
 
 <style scoped lang="scss">
 .heatmapchart {
+	&-fit {
+		height: 100%;
+		overflow: hidden;
+	}
+
 	&-title {
 		display: flex;
 		justify-content: center;
