@@ -86,26 +86,49 @@ CREATE TABLE IF NOT EXISTS %s (
 );`
 
 // youBikeStation holds the upstream JSON payload — only fields the writer
-// actually persists are decoded.
+// actually persists are decoded. Numeric fields are decoded as json.Number
+// because the upstream returns lat/lng as strings (and may flip other fields
+// between string and number across releases).
 type youBikeStation struct {
-	StationNo             string `json:"station_no"`
-	NameTW                string `json:"name_tw"`
-	NameEN                string `json:"name_en"`
-	DistrictTW            string `json:"district_tw"`
-	DistrictEN            string `json:"district_en"`
-	AddressTW             string `json:"address_tw"`
-	AddressEN             string `json:"address_en"`
-	Status                int    `json:"status"`
-	UpdatedAt             string `json:"updated_at"`
-	ParkingSpaces         int    `json:"parking_spaces"`
-	AvailableSpaces       int    `json:"available_spaces"`
-	EmptySpaces           int    `json:"empty_spaces"`
-	Lat                   float64 `json:"lat"`
-	Lng                   float64 `json:"lng"`
+	StationNo             string      `json:"station_no"`
+	NameTW                string      `json:"name_tw"`
+	NameEN                string      `json:"name_en"`
+	DistrictTW            string      `json:"district_tw"`
+	DistrictEN            string      `json:"district_en"`
+	AddressTW             string      `json:"address_tw"`
+	AddressEN             string      `json:"address_en"`
+	Status                json.Number `json:"status"`
+	UpdatedAt             string      `json:"updated_at"`
+	ParkingSpaces         json.Number `json:"parking_spaces"`
+	AvailableSpaces       json.Number `json:"available_spaces"`
+	EmptySpaces           json.Number `json:"empty_spaces"`
+	Lat                   string      `json:"lat"`
+	Lng                   string      `json:"lng"`
 	AvailableSpacesDetail struct {
-		YB2 int `json:"yb2"`
-		EYB int `json:"eyb"`
+		YB2 json.Number `json:"yb2"`
+		EYB json.Number `json:"eyb"`
 	} `json:"available_spaces_detail"`
+}
+
+func ybNumInt(n json.Number) int {
+	if n == "" {
+		return 0
+	}
+	if v, err := n.Int64(); err == nil {
+		return int(v)
+	}
+	if v, err := strconv.Atoi(strings.TrimSpace(string(n))); err == nil {
+		return v
+	}
+	return 0
+}
+
+func ybStrFloat(s string) float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // stationRow is the post-transform shape that gets bulk-inserted.
@@ -232,15 +255,15 @@ func transformYouBikeStations(stations []youBikeStation) []stationRow {
 			sareaen:     s.DistrictEN,
 			addr:        s.AddressTW,
 			adren:       s.AddressEN,
-			status:      s.Status,
+			status:      ybNumInt(s.Status),
 			dataTime:    parseTaipeiTime(s.UpdatedAt),
-			totalBikes:  s.ParkingSpaces,
-			availRent:   s.AvailableSpaces,
-			yb2:         s.AvailableSpacesDetail.YB2,
-			eyb:         s.AvailableSpacesDetail.EYB,
-			availReturn: s.EmptySpaces,
-			longitude:   s.Lng,
-			latitude:    s.Lat,
+			totalBikes:  ybNumInt(s.ParkingSpaces),
+			availRent:   ybNumInt(s.AvailableSpaces),
+			yb2:         ybNumInt(s.AvailableSpacesDetail.YB2),
+			eyb:         ybNumInt(s.AvailableSpacesDetail.EYB),
+			availReturn: ybNumInt(s.EmptySpaces),
+			longitude:   ybStrFloat(s.Lng),
+			latitude:    ybStrFloat(s.Lat),
 		})
 	}
 	return rows
@@ -302,7 +325,10 @@ func writeYouBikeRows(ctx context.Context, rows []stationRow) error {
 }
 
 func bulkInsertYouBike(ctx context.Context, tx *sql.Tx, table string, rows []stationRow) error {
-	const colsPerRow = 17
+	// 17 actual columns + 2 extra params for ST_MakePoint(longitude, latitude).
+	// We pass longitude/latitude twice so PG resolves NUMERIC and float8 contexts
+	// to independent placeholders, avoiding "inconsistent types deduced" errors.
+	const colsPerRow = 19
 
 	for start := 0; start < len(rows); start += youBikeBatchSize {
 		end := start + youBikeBatchSize
@@ -320,12 +346,13 @@ func bulkInsertYouBike(ctx context.Context, tx *sql.Tx, table string, rows []sta
 				"($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,ST_SetSRID(ST_MakePoint($%d,$%d),4326))",
 				base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8,
 				base+9, base+10, base+11, base+12, base+13, base+14, base+15,
-				base+16, base+17, base+16, base+17,
+				base+16, base+17, base+18, base+19,
 			))
 			args = append(args,
 				r.sno, r.city, r.sna, r.snaen, r.sarea, r.sareaen, r.addr, r.adren,
 				r.status, r.dataTime,
 				r.totalBikes, r.availRent, r.yb2, r.eyb, r.availReturn,
+				r.longitude, r.latitude,
 				r.longitude, r.latitude,
 			)
 		}
@@ -337,7 +364,7 @@ func bulkInsertYouBike(ctx context.Context, tx *sql.Tx, table string, rows []sta
             longitude, latitude, wkb_geometry
         ) VALUES %s`, table, strings.Join(placeholders, ","))
 
-		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+		if _, err := tx.ExecContext(ctx, stmt, args...); err != nil {
 			return err
 		}
 	}

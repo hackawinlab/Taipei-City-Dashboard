@@ -75,6 +75,7 @@ services:
       TWCC_TIMEOUT: ${TWCC_TIMEOUT}
       TWCC_MAX_RETRY: ${TWCC_MAX_RETRY}
       TWCC_MAX_CONCURRENT: ${TWCC_MAX_CONCURRENT}
+      YOUBIKE_FETCHER_ENABLED: ${YOUBIKE_FETCHER_ENABLED:-false}
     volumes:
       - ../Taipei-City-Dashboard-BE:/opt/Taipei-City-Dashboard-BE
     working_dir: /opt/Taipei-City-Dashboard-BE
