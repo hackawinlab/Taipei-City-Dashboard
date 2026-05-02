@@ -28,6 +28,7 @@ import { useDialogStore } from "./dialogStore";
 
 // Vue Components
 import MapPopup from "../components/map/MapPopup.vue";
+import YouBikeStationPopup from "../components/map/YouBikeStationPopup.vue";
 
 // Utility Functions or Configs
 import {
@@ -1953,6 +1954,16 @@ export const useMapStore = defineStore("map", {
 			if (!clickFeatureDatas || clickFeatureDatas.length === 0) {
 				return;
 			}
+
+			// YouBike timemap stations open a custom popup with a 24-hour
+			// available/capacity bar chart instead of the generic property popup.
+			const youbikeFeature = clickFeatureDatas.find((f) =>
+				f.layer?.id?.startsWith("youbike_timemap-"),
+			);
+			if (youbikeFeature) {
+				this.openYouBikeStationPopup(youbikeFeature, event.lngLat);
+				return;
+			}
 			// Parse clickFeatureDatas to get the first 3 unique layer datas, skip over already included layers
 			const mapConfigs = [];
 			const parsedPopupContent = [];
@@ -2153,6 +2164,40 @@ export const useMapStore = defineStore("map", {
 					time: Date.now(),
 				});
 			}
+		},
+		// 1b. Custom popup for YouBike timemap stations — renders a 24-hour
+		// available/capacity bar chart for the clicked station.
+		openYouBikeStationPopup(feature, lngLat) {
+			const props = feature.properties || {};
+			if (!props.station_uid) return;
+
+			const coords =
+				feature.geometry?.coordinates ?? [lngLat.lng, lngLat.lat];
+
+			// Let Mapbox auto-pick the anchor based on available room: popup
+			// goes above the marker by default and flips below only when the
+			// click is near the top edge of the map.
+			this.popup = new mapboxGl.Popup({
+				maxWidth: "360px",
+				offset: 12,
+			})
+				.setLngLat(coords)
+				.setHTML('<div id="vue-popup-content"></div>')
+				.addTo(this.map);
+
+			// Override the project-wide .mapboxgl-popup max-width (260px) so the
+			// chart has room to render without clipping.
+			const popupEl = this.popup.getElement();
+			if (popupEl) popupEl.style.setProperty("max-width", "360px", "important");
+
+			nextTick(() => {
+				const app = createApp(YouBikeStationPopup, {
+					stationUid: String(props.station_uid),
+					stationName: props.station_name || "",
+					city: props.city || "",
+				});
+				app.mount("#vue-popup-content");
+			});
 		},
 		// 2. Remove the current popup
 		removePopup() {

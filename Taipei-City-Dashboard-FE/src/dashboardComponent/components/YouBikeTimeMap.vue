@@ -1,6 +1,6 @@
 <!-- Developed by Taipei Urban Intelligence Center 2023-2024-->
 <script setup>
-import { ref, reactive, computed, watch, onUnmounted } from "vue";
+import { ref, reactive, computed, watch, onUnmounted, onMounted } from "vue";
 import { useMapStore } from "../../store/mapStore";
 import http from "../../router/axios";
 
@@ -260,6 +260,24 @@ function drawAIHighlight(center, radiusMeters, verdict) {
 }
 
 defineExpose({ applyAIEvent, getComponentState, clearAIHighlight });
+
+// Trigger an initial fetch so the map source matches the slider's starting
+// position (00:00). Without this, the layer is loaded by mapStore using the
+// current real hour while the slider sits at slot 0, so the bikes shown
+// don't match what the slider says — and stay that way until the user
+// touches the slider. Wait until the layer source exists before fetching.
+onMounted(async () => {
+	for (let i = 0; i < 30; i++) {
+		if (
+			layerId.value &&
+			mapStore.map?.getSource(`${layerId.value}-source`)
+		) {
+			fetchSlot(currentSlot.value);
+			return;
+		}
+		await new Promise((r) => setTimeout(r, 200));
+	}
+});
 
 onUnmounted(() => {
 	unmounted = true;
