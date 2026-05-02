@@ -2,16 +2,40 @@
 
 Branch: `feat/ubike-time-series` (based on v3.1.9)
 
+## Reference UI
+
+Checked `https://citydashboard.taipei/mapview?index=youbike&city=taipei`:
+- Left panel (`.map-charts`, 360px wide in `MapView.vue`) lists `DashboardComponent` cards
+- When a card is toggled ON, it expands and renders the chart component inside the card
+- The YouBike card shows a donut chart → **we replace this with a time slider for our new component**
+- Map shows color-coded circle markers (green/yellow/red)
+
 ## Scope
 
 Two modules from the 智慧通勤 theme:
 
 | Module | Type | Risk | Status |
 |--------|------|------|--------|
-| **M2** YouBike 一日動態地圖 | Map (Mapbox circle layer + time slider) | Low — lat/lon already in DB | ✅ data ready |
-| **M4** YouBike 缺車時段排名 | Chart (Heatmap + Bar) | Low — no geometry needed | ✅ data ready |
+| **M2** YouBike 一日動態地圖 | Left panel slider → Mapbox circle layer | Low — lat/lon in DB | ✅ data ready |
+| **M4** YouBike 缺車時段排名 | Heatmap + Bar chart (reuse existing types) | Low | ✅ data ready |
 
-Data already collected: `youbike_snapshots` — 13,896 rows (Taipei, 1,737 站) + 10,668 rows (NewTaipei, 1,524 站), updated every 30 min.
+Data: `youbike_snapshots` — 13,896 rows (Taipei, 1,737 站) + 10,668 (NewTaipei, 1,524 站), every 30 min.
+
+---
+
+## Architecture Overview
+
+```
+MapView.vue (.map-charts panel, 360px)
+  └─ DashboardComponent (card, toggled ON)
+       └─ YouBikeTimeMap.vue  ← renders slider UI in the card
+            │  drag slider → fetch /api/v1/commute/youbike/map?hour=X
+            └─ mapStore.updateTimeMapSource(layerId, geojson)
+                 └─ map.getSource(`${layerId}-source`).setData(geojson)
+                      └─ Mapbox re-renders circles with new availability colors
+```
+
+Toggle ON → `mapStore.addToMapLayerList(map_config)` → new `source: "api"` branch → initial fetch + circle layer added to map.
 
 ---
 
@@ -21,15 +45,13 @@ Data already collected: `youbike_snapshots` — 13,896 rows (Taipei, 1,737 站) 
 
 Three handlers:
 
-#### 1. `GetYouBikeMap`
+#### `GetYouBikeMap`
 ```
 GET /api/v1/commute/youbike/map?city=all&hour=8
 ```
 - `city` ∈ {`Taipei`, `NewTaipei`, `all`}, default `all`
 - `hour` ∈ [0,23], default = current hour (UTC+8)
-- Query: group `youbike_snapshots` by station for the given hour, compute `availability_pct = AVG(available_bikes/total_docks)*100`
-- Response: GeoJSON FeatureCollection — each station is a `Point` Feature with properties `station_uid`, `station_name`, `city`, `availability_pct`, `avg_available`, `total_docks`
-- Color field: `"#ef4444"` (<10%), `"#f97316"` (10-30%), `"#22c55e"` (≥30%)
+- Response: GeoJSON FeatureCollection — each station is a `Point` Feature
 
 ```sql
 SELECT station_uid, station_name, lat, lon, city,
@@ -43,49 +65,59 @@ GROUP BY station_uid, station_name, lat, lon, city
 ORDER BY availability_pct ASC;
 ```
 
-#### 2. `GetYouBikeShortage`
+Response shape (GeoJSON FeatureCollection):
+```json
+{
+  "type": "FeatureCollection",
+  "features": [{
+    "type": "Feature",
+    "geometry": { "type": "Point", "coordinates": [121.517, 25.048] },
+    "properties": {
+      "station_uid": "500101001",
+      "station_name": "捷運市政府站(2號出口)",
+      "city": "Taipei",
+      "availability_pct": 72.4,
+      "avg_available": 8,
+      "total_docks": 14
+    }
+  }]
+}
+```
+
+#### `GetYouBikeShortage`
 ```
 GET /api/v1/commute/youbike/shortage?city=all
 ```
-- Returns 24×2 heatmap data (hour × city)
-- Each cell: `shortage_pct = empty_stations / total_stations * 100`
-- Response shape for HeatmapChart: `{ series: [{ name: "Taipei", data: [{x:"0",y:12.3}, ...] }, { name: "NewTaipei", data: [...] }] }`
-
-```sql
-SELECT EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int AS hour,
-       city,
-       COUNT(DISTINCT station_uid) FILTER (WHERE available_bikes = 0) AS empty_stations,
-       COUNT(DISTINCT station_uid)                                      AS total_stations
-FROM youbike_snapshots
-WHERE (city = $1 OR $1 = 'all')
-GROUP BY 1, 2
-ORDER BY 1, 2;
+Returns 24×2 heatmap data shaped for `HeatmapChart.vue`:
+```json
+{
+  "series": [
+    { "name": "Taipei",    "data": [{"x":"0","y":8.2}, {"x":"1","y":6.1}, ...] },
+    { "name": "NewTaipei", "data": [{"x":"0","y":5.3}, ...] }
+  ],
+  "categories": ["0","1",...,"23"]
+}
 ```
 
-#### 3. `GetYouBikeBlacklist`
+#### `GetYouBikeBlacklist`
 ```
 GET /api/v1/commute/youbike/blacklist?city=all&limit=20
 ```
-- TOP N stations by `empty_pct` (available_bikes = 0)
-- Response: `{ data: [{ station_uid, station_name, city, lat, lon, empty_pct, empty_count, total_count }] }` — BarChart-compatible
-
-```sql
-SELECT station_uid, station_name, city, lat, lon,
-  COUNT(*) FILTER (WHERE available_bikes = 0)                                     AS empty_count,
-  COUNT(*)                                                                         AS total_count,
-  ROUND(COUNT(*) FILTER (WHERE available_bikes=0)*100.0 / NULLIF(COUNT(*),0), 1) AS empty_pct
-FROM youbike_snapshots
-WHERE (city = $1 OR $1 = 'all')
-GROUP BY station_uid, station_name, city, lat, lon
-HAVING COUNT(*) > 2
-ORDER BY empty_pct DESC
-LIMIT $2;
+Returns top-N stations by empty rate, shaped for `BarChart.vue`:
+```json
+{
+  "data": [{ "x": "台北車站(博愛路)", "y": 87.5, "city": "Taipei" }]
+}
 ```
 
 ### File: `Taipei-City-Dashboard-BE/app/routes/router.go` (edit)
 
-Add `configureCommuteRoutes()` call inside `ConfigureRoutes()`, and add the new function:
+Add inside `ConfigureRoutes()`:
+```go
+configureCommuteRoutes()
+```
 
+Add new function:
 ```go
 func configureCommuteRoutes() {
     commuteRoutes := RouterGroup.Group("/commute")
@@ -104,7 +136,6 @@ func configureCommuteRoutes() {
 ```sql
 CREATE INDEX IF NOT EXISTS idx_youbike_hour
   ON youbike_snapshots (city, (EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')));
-
 CREATE INDEX IF NOT EXISTS idx_youbike_available
   ON youbike_snapshots (city, available_bikes, snapshot_at);
 ```
@@ -113,49 +144,238 @@ CREATE INDEX IF NOT EXISTS idx_youbike_available
 
 ## Phase 2 — Frontend: M2 YouBike 一日動態地圖 (target: 5 hours)
 
-### File: `Taipei-City-Dashboard-FE/src/dashboardComponent/components/YouBikeTimeMap.vue` (new)
+### 2-A. `mapStore.js` — add `source: "api"` support
 
-Custom chart type that renders a Mapbox circle layer driven by a 24-hour time slider.
+In `addToMapLayerList()`, after the existing `else if (element.source === "raster")` branch, add:
 
-**Props** (same as all dashboard components):
 ```js
-defineProps(["chart_config", "activeChart", "series", "map_config", "map_filter", "map_filter_on"])
+} else if (element.source === "api") {
+    this.fetchApiGeoJson(appendLayer);
+}
 ```
 
-**State:**
-- `currentHour` — reactive, drives API fetch
-- `allHoursData` — cache: `Map<hour, GeoJSON>` for play mode
-- `playing` — bool, auto-advance timer
+Add two new store actions:
 
-**Mapbox setup:**
-- Source ID: `youbike-timemap`
-- Layer: `circle` paint driven by `availability_pct`
-  ```js
-  "circle-color": ["step", ["get", "availability_pct"],
-    "#ef4444", 10, "#f97316", 30, "#22c55e"]
-  "circle-radius": ["interpolate", ["linear"], ["get", "total_docks"], 10, 4, 50, 9]
-  ```
+```js
+// Initial fetch for an API-sourced layer (called on toggle ON)
+async fetchApiGeoJson(map_config) {
+    try {
+        const hour = new Date().toLocaleString("en-US", {
+            timeZone: "Asia/Taipei", hour: "numeric", hour12: false
+        });
+        const res = await axios.get(
+            `${map_config.api_endpoint}?city=all&hour=${hour}`
+        );
+        this.map.addSource(`${map_config.layerId}-source`, {
+            type: "geojson",
+            data: res.data,
+        });
+        this.addMapLayer(map_config);
+    } catch (e) {
+        console.error("fetchApiGeoJson failed", e);
+    } finally {
+        this.loadingLayers = this.loadingLayers.filter(
+            (el) => el !== map_config.layerId
+        );
+    }
+},
 
-**Time slider UI:**
-- `<input type="range" min="0" max="23" v-model="currentHour" />`
-- Display: `00:00 — 23:00` labels
-- Play button: `setInterval` every 800ms, increments hour mod 24
-- On play start: prefetch all 24 hours and fill `allHoursData` cache
+// Called by YouBikeTimeMap when slider changes
+updateTimeMapSource(layerId, geojsonData) {
+    const source = this.map.getSource(`${layerId}-source`);
+    if (source) source.setData(geojsonData);
+},
+```
 
-**API call:**
-- On `currentHour` change (debounce 200ms): `GET /api/v1/commute/youbike/map?city=all&hour={h}`
-- Use `allHoursData` cache if available (play mode)
+### 2-B. `mapConfig.js` — add circle paint for availability
 
-**Popup on circle click:** station name, city, available / total, availability %
+In `/src/assets/configs/mapbox/mapConfig.js`, add a new paint entry:
 
-### Register new component type
+```js
+"circle-availability": {
+    "circle-color": [
+        "step", ["get", "availability_pct"],
+        "#ef4444",   // 0–9%: red
+        10, "#f97316", // 10–29%: orange
+        30, "#22c55e"  // ≥30%: green
+    ],
+    "circle-radius": [
+        "interpolate", ["linear"], ["get", "total_docks"],
+        10, 4,
+        50, 9
+    ],
+    "circle-opacity": 0.85,
+    "circle-stroke-width": 1,
+    "circle-stroke-color": "#1a1a1a",
+},
+```
 
-File: `Taipei-City-Dashboard-FE/src/dashboardComponent/index.js` (or wherever chart types are registered)
+### 2-C. `YouBikeTimeMap.vue` — the chart component
 
-Add `YouBikeTimeMap` to the component type map.
+**File:** `src/dashboardComponent/components/YouBikeTimeMap.vue`
 
-### Dashboard seed entry (add to DB via migration or admin UI)
+This is the chart component rendered inside the DashboardComponent card when the YouBike time map layer is toggled on. It shows:
+- A time slider (0–23h) with the current hour label
+- Play/pause button
+- A color legend (red/orange/green = availability)
 
+```vue
+<script setup>
+import { ref, watch, onUnmounted } from "vue";
+import { useMapStore } from "../../store/mapStore";
+import http from "../../router/axios";
+
+const props = defineProps(["chart_config", "activeChart", "series",
+                           "map_config", "map_filter", "map_filter_on"]);
+
+const mapStore = useMapStore();
+const currentHour = ref(new Date().getHours());  // init to current local hour
+const playing = ref(false);
+const cache = ref({});   // Map<hour, GeoJSON>
+let playTimer = null;
+
+const layerId = computed(() =>
+    props.map_config?.[0]
+        ? `${props.map_config[0].index}-${props.map_config[0].type}-${props.map_config[0].city}`
+        : null
+);
+
+// Fetch one hour's data; use cache if available
+async function fetchHour(hour) {
+    if (cache.value[hour]) {
+        mapStore.updateTimeMapSource(layerId.value, cache.value[hour]);
+        return;
+    }
+    const res = await http.get(
+        `/commute/youbike/map?city=all&hour=${hour}`
+    );
+    cache.value[hour] = res.data;
+    mapStore.updateTimeMapSource(layerId.value, res.data);
+}
+
+// Prefetch all 24h for play mode
+async function prefetchAll() {
+    for (let h = 0; h < 24; h++) {
+        if (!cache.value[h]) {
+            const res = await http.get(`/commute/youbike/map?city=all&hour=${h}`);
+            cache.value[h] = res.data;
+        }
+    }
+}
+
+watch(currentHour, (h) => fetchHour(h));
+
+function togglePlay() {
+    if (playing.value) {
+        clearInterval(playTimer);
+        playing.value = false;
+    } else {
+        playing.value = true;
+        prefetchAll();
+        playTimer = setInterval(() => {
+            currentHour.value = (currentHour.value + 1) % 24;
+        }, 800);
+    }
+}
+
+onUnmounted(() => clearInterval(playTimer));
+</script>
+
+<template>
+  <div class="youbike-timemap">
+    <div class="youbike-timemap-header">
+      <span class="hour-label">{{ String(currentHour).padStart(2,"0") }}:00</span>
+      <button class="play-btn" @click="togglePlay">
+        <span>{{ playing ? "pause" : "play_arrow" }}</span>
+      </button>
+    </div>
+    <div class="youbike-timemap-slider">
+      <span>00</span>
+      <input
+        type="range"
+        min="0"
+        max="23"
+        step="1"
+        v-model.number="currentHour"
+        @mousedown="playing && togglePlay()"
+      />
+      <span>23</span>
+    </div>
+    <div class="youbike-timemap-legend">
+      <span class="dot red" />  缺車 (&lt;10%)
+      <span class="dot orange" /> 普通 (10–30%)
+      <span class="dot green" />  充足 (≥30%)
+    </div>
+  </div>
+</template>
+
+<style scoped lang="scss">
+.youbike-timemap {
+    padding: var(--font-s);
+    display: flex;
+    flex-direction: column;
+    row-gap: var(--font-s);
+
+    &-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        .hour-label {
+            font-size: var(--font-xl);
+            font-weight: 700;
+            color: var(--color-highlight);
+        }
+        .play-btn span {
+            font-family: var(--font-icon);
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--color-highlight);
+        }
+    }
+
+    &-slider {
+        display: flex;
+        align-items: center;
+        column-gap: var(--font-s);
+
+        input[type="range"] {
+            flex: 1;
+            accent-color: var(--color-highlight);
+            height: 4px;
+            cursor: pointer;
+        }
+        span { font-size: var(--font-s); color: var(--color-complement-text); }
+    }
+
+    &-legend {
+        display: flex;
+        align-items: center;
+        column-gap: var(--font-ms);
+        font-size: var(--font-s);
+        color: var(--color-complement-text);
+
+        .dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            &.red    { background: #ef4444; }
+            &.orange { background: #f97316; }
+            &.green  { background: #22c55e; }
+        }
+    }
+}
+</style>
+```
+
+### 2-D. Register in `DashboardComponent.vue`
+
+Find where `chart_config.types[0]` is mapped to a component — add `YouBikeTimeMap` to the import and the component map. The exact registration file may be `src/dashboardComponent/DashboardComponent.vue` or the chart-type switch inside it.
+
+### 2-E. Dashboard seed data
+
+Component DB entry (insert via admin or migration):
 ```json
 {
   "index": "youbike_timemap",
@@ -165,41 +385,36 @@ Add `YouBikeTimeMap` to the component type map.
     "color": ["#22c55e", "#f97316", "#ef4444"]
   },
   "map_config": [{
-    "type": "custom-timemap",
-    "source": "api",
-    "api_endpoint": "/api/v1/commute/youbike/map"
+    "index":        "youbike_timemap",
+    "type":         "circle",
+    "source":       "api",
+    "api_endpoint": "/api/v1/commute/youbike/map",
+    "city":         "taipei",
+    "icon":         "availability",
+    "size":         "availability",
+    "paint": {
+      "circle-color": [
+        "step", ["get", "availability_pct"],
+        "#ef4444", 10, "#f97316", 30, "#22c55e"
+      ],
+      "circle-radius": [
+        "interpolate", ["linear"], ["get", "total_docks"], 10, 4, 50, 9
+      ],
+      "circle-opacity": 0.85,
+      "circle-stroke-width": 1,
+      "circle-stroke-color": "#1a1a1a"
+    }
   }]
 }
 ```
+
+The `paint` field is already merged into the layer config in the existing `addMapLayer()` via `...map_config.paint`.
 
 ---
 
 ## Phase 3 — Frontend: M4 YouBike 缺車時段排名 (target: 2 hours)
 
 Uses **existing** `HeatmapChart.vue` and `BarChart.vue` — no new component needed.
-
-### Backend data shaping
-
-`GetYouBikeShortage` formats response to match HeatmapChart's expected `series` format:
-```json
-{
-  "series": [
-    { "name": "Taipei",    "data": [{"x":"0","y":8.2}, {"x":"1","y":6.1}, ...] },
-    { "name": "NewTaipei", "data": [{"x":"0","y":5.3}, ...] }
-  ],
-  "categories": ["0","1","2",...,"23"]
-}
-```
-
-`GetYouBikeBlacklist` formats for BarChart:
-```json
-{
-  "data": [
-    { "x": "台北車站(博愛路)", "y": 87.5, "city": "Taipei" },
-    ...
-  ]
-}
-```
 
 ### Dashboard seed entries
 
@@ -212,10 +427,9 @@ Uses **existing** `HeatmapChart.vue` and `BarChart.vue` — no new component nee
       "types": ["HeatmapChart"],
       "color": ["#22c55e", "#f97316", "#ef4444"],
       "categories": ["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23"],
-      "unit": "%",
-      "description": "各時段雙北 YouBike 缺車率（available_bikes=0 站數 / 總站數）"
+      "unit": "%"
     },
-    "api_endpoint": "/api/v1/commute/youbike/shortage"
+    "map_config": []
   },
   {
     "index": "youbike_blacklist",
@@ -223,13 +437,14 @@ Uses **existing** `HeatmapChart.vue` and `BarChart.vue` — no new component nee
     "chart_config": {
       "types": ["BarChart"],
       "color": ["#ef4444"],
-      "unit": "%",
-      "description": "歷史缺車率最高的 20 個站點"
+      "unit": "%"
     },
-    "api_endpoint": "/api/v1/commute/youbike/blacklist?limit=20"
+    "map_config": []
   }
 ]
 ```
+
+Both components use the generic chart pipeline (`/api/v1/components/:id/chart`) — the backend query stored in the component's DB record points to a custom SQL that calls `GetYouBikeShortage` / `GetYouBikeBlacklist` logic. Alternatively, add a `source: "custom-api"` type to the FE chart data fetching, following the same pattern as the map layer `source: "api"`.
 
 ---
 
@@ -237,25 +452,32 @@ Uses **existing** `HeatmapChart.vue` and `BarChart.vue` — no new component nee
 
 | File | Action |
 |------|--------|
-| `Taipei-City-Dashboard-BE/app/controllers/commute.go` | Create — 3 handlers |
-| `Taipei-City-Dashboard-BE/app/routes/router.go` | Edit — add `configureCommuteRoutes()` |
-| `Taipei-City-Dashboard-FE/src/dashboardComponent/components/YouBikeTimeMap.vue` | Create — custom map+slider component |
-| `Taipei-City-Dashboard-FE/src/dashboardComponent/index.js` | Edit — register `YouBikeTimeMap` type |
+| `Taipei-City-Dashboard-BE/app/controllers/commute.go` | **Create** — 3 handlers |
+| `Taipei-City-Dashboard-BE/app/routes/router.go` | **Edit** — add `configureCommuteRoutes()` |
+| `Taipei-City-Dashboard-FE/src/store/mapStore.js` | **Edit** — add `source:"api"` branch, `fetchApiGeoJson`, `updateTimeMapSource` |
+| `Taipei-City-Dashboard-FE/src/assets/configs/mapbox/mapConfig.js` | **Edit** — add `circle-availability` paint config |
+| `Taipei-City-Dashboard-FE/src/dashboardComponent/components/YouBikeTimeMap.vue` | **Create** — slider UI + map update |
+| `Taipei-City-Dashboard-FE/src/dashboardComponent/DashboardComponent.vue` | **Edit** — register `YouBikeTimeMap` type |
 | DB (hackathon-pipeline) | Add 2 indexes + seed 3 component rows |
 
 ---
 
 ## Implementation Order
 
-1. `commute.go` — write and `go build` to verify (no frontend needed)
-2. `router.go` — wire routes, smoke-test with `curl`
-3. `YouBikeTimeMap.vue` — implement map + slider, connect to real API
-4. Register type, add dashboard seed data, verify in UI
-5. Shape shortage/blacklist responses → verify HeatmapChart + BarChart render
-6. Add Mapbox popup + legend labels
-7. Manual test: play mode caches all 24h, slider debounce, city toggle
+1. `commute.go` + `router.go` → `go build` to verify, smoke-test with `curl`
+2. `mapStore.js` — add `source:"api"`, `fetchApiGeoJson`, `updateTimeMapSource`
+3. `mapConfig.js` — add circle-availability paint
+4. `YouBikeTimeMap.vue` — slider UI, connects to `mapStore.updateTimeMapSource`
+5. `DashboardComponent.vue` — register the new type
+6. Insert component seed data → verify toggle-on shows map + slider
+7. Verify: drag slider → map colors update; play mode cycles 24h
+8. M4: shape shortage/blacklist API responses, verify HeatmapChart + BarChart render
 
 ## Known Risks
 
-- `YouBikeTimeMap` requires Mapbox map instance access from inside a dashboard component — check how existing map-aware components (`DistrictChart`, `MapLegend`) get the map ref, replicate the pattern.
-- The existing component data pipeline (`/api/v1/components/:id/chart`) uses a generic SQL query stored in DB. The new `/commute/youbike/*` endpoints bypass this and return custom shapes. Confirm the FE component can be configured to call a direct API endpoint rather than going through the generic chart pipeline.
+| Risk | Mitigation |
+|------|-----------|
+| `mapStore.updateTimeMapSource` called before the source is added (layer not yet loaded) | Guard with `if (source)` check; retry after 200ms if null |
+| Rapid slider drag fires many concurrent fetches | `debounce(fetchHour, 200)` on `watch(currentHour)` |
+| Play mode prefetch rate-limit (30 RPM limit on backend) | Prefetch sequentially with 100ms delay between requests; 24 requests = well under limit |
+| `DashboardComponent` chart type switch location | Read `DashboardComponent.vue` to confirm import pattern before Phase 2-D |
