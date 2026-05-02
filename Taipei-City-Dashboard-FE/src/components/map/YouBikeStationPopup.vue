@@ -35,6 +35,7 @@ const chartOptions = ref({
 		animations: { enabled: false },
 		fontFamily: "inherit",
 		background: "transparent",
+		offsetY: 0,
 	},
 	theme: { mode: "dark" },
 	colors: ["#22c55e", "#38bdf8"],
@@ -47,7 +48,7 @@ const chartOptions = ref({
 		show: true,
 		borderColor: "rgba(255,255,255,0.08)",
 		strokeDashArray: 3,
-		padding: { left: 10, right: 10 },
+		padding: { top: -10, bottom: -8, left: 10, right: 10 },
 		xaxis: { lines: { show: false } },
 	},
 	xaxis: {
@@ -59,15 +60,21 @@ const chartOptions = ref({
 		labels: {
 			style: { colors: "#9ca3af", fontSize: "10px" },
 			rotate: 0,
-			hideOverlappingLabels: true,
-			formatter: (val) =>
-				val && val.endsWith(":00") && Number(val.split(":")[0]) % 3 === 0
-					? val.split(":")[0]
-					: "",
+			hideOverlappingLabels: false,
+			showDuplicates: false,
+			formatter: (val, _, opts) => {
+				const idx = opts?.i ?? -1;
+				// 96 slots, label every 6 hours: idx 0, 24, 48, 72.
+				if (idx === 0) return "00:00";
+				if (idx === 24) return "06:00";
+				if (idx === 48) return "12:00";
+				if (idx === 72) return "18:00";
+				return "";
+			},
 		},
 		axisBorder: { show: false },
 		axisTicks: { show: false },
-		tickAmount: 8,
+		tickPlacement: "between",
 	},
 	yaxis: {
 		title: {
@@ -178,7 +185,7 @@ onMounted(async () => {
 		<VueApexCharts
 			v-else
 			type="bar"
-			height="220"
+			height="180"
 			width="100%"
 			:options="chartOptions"
 			:series="series"
