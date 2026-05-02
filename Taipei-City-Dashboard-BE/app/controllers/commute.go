@@ -153,6 +153,99 @@ ORDER BY availability_pct ASC`
 	})
 }
 
+// GetYouBikeStationHourly handles GET /api/v1/commute/youbike/station/:uid/hourly
+// Returns 24-element arrays of average available_bikes and capacity (max total_docks)
+// for the given station, indexed by Asia/Taipei hour 0..23.
+func GetYouBikeStationHourly(c *gin.Context) {
+	uid := c.Param("uid")
+	if uid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "missing station uid"})
+		return
+	}
+
+	if models.DBHackathon == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
+		return
+	}
+
+	query := `
+SELECT EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int AS hour,
+       ROUND(AVG(available_bikes)::numeric, 1)::float                 AS avg_available,
+       MAX(total_docks)                                                AS total_docks,
+       MAX(station_name)                                               AS station_name,
+       MAX(city)                                                       AS city
+FROM youbike_snapshots
+WHERE station_uid = $1
+GROUP BY 1
+ORDER BY 1`
+
+	sqlDB, err := models.DBHackathon.DB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("db error: %v", err)})
+		return
+	}
+
+	rows, err := sqlDB.Query(query, uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err)})
+		return
+	}
+	defer rows.Close()
+
+	available := make([]float64, 24)
+	total := make([]int64, 24)
+	var stationName, stationCity string
+
+	for rows.Next() {
+		var (
+			hour       int
+			avgAvail   sql.NullFloat64
+			totalDocks sql.NullInt64
+			name       sql.NullString
+			city       sql.NullString
+		)
+		if err := rows.Scan(&hour, &avgAvail, &totalDocks, &name, &city); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("scan error: %v", err)})
+			return
+		}
+		if hour >= 0 && hour < 24 {
+			available[hour] = avgAvail.Float64
+			total[hour] = totalDocks.Int64
+		}
+		if name.Valid && stationName == "" {
+			stationName = name.String
+		}
+		if city.Valid && stationCity == "" {
+			stationCity = city.String
+		}
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("rows error: %v", err)})
+		return
+	}
+
+	if stationName == "" {
+		c.JSON(http.StatusNotFound, gin.H{"message": "station not found"})
+		return
+	}
+
+	hours := make([]string, 24)
+	for h := 0; h < 24; h++ {
+		hours[h] = strconv.Itoa(h)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"station_uid":     uid,
+			"station_name":    stationName,
+			"city":            stationCity,
+			"hours":           hours,
+			"available_bikes": available,
+			"total_docks":     total,
+		},
+	})
+}
+
 // GetYouBikeShortage handles GET /api/v1/commute/youbike/shortage
 // Query params: city (Taipei|NewTaipei|all, default all)
 func GetYouBikeShortage(c *gin.Context) {
