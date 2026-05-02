@@ -36,6 +36,10 @@ const chartOptions = ref({
 		fontFamily: "inherit",
 		background: "transparent",
 		offsetY: 0,
+		// ApexCharts adds 15px of breathing room around the chart by
+		// default; zero it so the x-axis title sits right under the
+		// axis labels.
+		parentHeightOffset: 0,
 	},
 	theme: { mode: "dark" },
 	colors: ["#22c55e", "#38bdf8"],
@@ -57,6 +61,7 @@ const chartOptions = ref({
 		categories: xCategories,
 		title: {
 			text: "時間 (Asia/Taipei，每 15 分鐘)",
+			offsetY: -8,
 			style: { color: "#9ca3af", fontSize: "10px", fontWeight: 400 },
 		},
 		labels: {
