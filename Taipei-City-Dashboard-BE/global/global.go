@@ -85,6 +85,18 @@ var (
 	SSLMode:  getEnv("DB_DASHBOARD_SSLMODE", "disable"),
 	}
 
+	// PostgresHackathon defines the configuration for the hackathon pipeline database.
+	// Lives on the same Postgres instance as the manager DB — reuses those credentials
+	// and only overrides the database name.
+	PostgresHackathon = DatabaseConfig{
+		Host:     PostgresManager.Host,
+		Port:     PostgresManager.Port,
+		User:     PostgresManager.User,
+		Password: PostgresManager.Password,
+		DBName:   getEnv("DB_HACKATHON_DBNAME", "hackathon"),
+		SSLMode:  PostgresManager.SSLMode,
+	}
+
 	// only used in the init function.
 	PostgresManagerSampleDataFile = getEnv("MANAGER_SAMPLE_FILE", "dashboardmanager-demo.sql")
     PostgresDashboardSampleDataFile = getEnv("DASHBOARD_SAMPLE_FILE", "dashboard-demo.sql")

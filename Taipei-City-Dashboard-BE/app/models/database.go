@@ -31,6 +31,7 @@ import (
 var (
 	DBDashboard *gorm.DB
 	DBManager   *gorm.DB
+	DBHackathon *gorm.DB
 )
 
 // ConnectToDatabases connects to the two PostgreSQL databases used by this application.
@@ -83,6 +84,28 @@ func ConnectToDatabase(dbConfig global.DatabaseConfig) *gorm.DB {
 	return dbConn
 }
 
+// ConnectToHackathonDB connects to the hackathon pipeline PostgreSQL database.
+// Unlike ConnectToDatabases, this does not panic on failure so the main app can
+// still start if the hackathon DB is not available.
+func ConnectToHackathonDB() {
+	dbargs := fmt.Sprintf(
+		"host=%s port=%s user=%s dbname=%s password=%s sslmode=%s",
+		global.PostgresHackathon.Host,
+		global.PostgresHackathon.Port,
+		global.PostgresHackathon.User,
+		global.PostgresHackathon.DBName,
+		global.PostgresHackathon.Password,
+		global.PostgresHackathon.SSLMode,
+	)
+	dbConn, err := gorm.Open(postgres.Open(dbargs), &gorm.Config{})
+	if err != nil {
+		logs.FWarn("Hackathon DB not available, commute endpoints will return errors: %v", err)
+		return
+	}
+	logs.FInfo("%s hackathon database connected", global.PostgresHackathon.Host)
+	DBHackathon = dbConn
+}
+
 // CloseConnects closes the connections to the specified databases.
 // It takes a variable number of database names and closes the corresponding connections.
 func CloseConnects(dbNames ...interface{}) {
@@ -94,6 +117,10 @@ func CloseConnects(dbNames ...interface{}) {
 				CloseConnect(dbString, DBDashboard)
 			case "MANAGER":
 				CloseConnect(dbString, DBManager)
+			case "HACKATHON":
+				if DBHackathon != nil {
+					CloseConnect(dbString, DBHackathon)
+				}
 			default:
 				panic("DB does not in connection list.")
 			}

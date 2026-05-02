@@ -41,6 +41,7 @@ func ConfigureRoutes() {
 	configureContributorRoutes()
 	configureChatLogRoutes()
 	configureAIRoutes()
+	configureCommuteRoutes()
 }
 
 func configureAuthRoutes() {
@@ -204,6 +205,17 @@ func configureAIRoutes() {
 	aiRoutes.Use(middleware.IsLoggedIn())
 	{
 		aiRoutes.POST("/chat/twai", controllers.ChatWithTWCC)
+	}
+}
+
+func configureCommuteRoutes() {
+	commuteRoutes := RouterGroup.Group("/commute")
+	commuteRoutes.Use(middleware.LimitAPIRequests(global.CommuteLimitAPIRequestsTimes, global.LimitRequestsDuration))
+	commuteRoutes.Use(middleware.LimitTotalRequests(global.CommuteLimitTotalRequestsTimes, global.LimitRequestsDuration))
+	{
+		commuteRoutes.GET("/youbike/map", controllers.GetYouBikeMap)
+		commuteRoutes.GET("/youbike/shortage", controllers.GetYouBikeShortage)
+		commuteRoutes.GET("/youbike/blacklist", controllers.GetYouBikeBlacklist)
 	}
 }
 

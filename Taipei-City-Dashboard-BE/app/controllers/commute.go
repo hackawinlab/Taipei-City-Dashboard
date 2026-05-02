@@ -1,0 +1,331 @@
+// Package controllers stores all the controllers for the Gin router.
+package controllers
+
+import (
+	"database/sql"
+	"fmt"
+	"math"
+	"net/http"
+	"strconv"
+	"time"
+
+	"TaipeiCityDashboardBE/app/models"
+
+	"github.com/gin-gonic/gin"
+)
+
+// youbike helpers
+
+func youbikeValidateCity(city string) bool {
+	return city == "Taipei" || city == "NewTaipei" || city == "all"
+}
+
+func youbikeDefaultHour() int {
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		return time.Now().UTC().Hour()
+	}
+	return time.Now().In(loc).Hour()
+}
+
+// GetYouBikeMap handles GET /api/v1/commute/youbike/map
+// Query params:
+//
+//	city    (Taipei|NewTaipei|all, default all)
+//	hour    (0-23, default current hour)
+//	quarter (0-3, optional — restricts to one 15-minute slot of the hour:
+//	         0=[:00,:15), 1=[:15,:30), 2=[:30,:45), 3=[:45,:60))
+func GetYouBikeMap(c *gin.Context) {
+	city := c.DefaultQuery("city", "all")
+	if !youbikeValidateCity(city) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid city: must be Taipei, NewTaipei, or all"})
+		return
+	}
+
+	hourStr := c.Query("hour")
+	var hour int
+	if hourStr == "" {
+		hour = youbikeDefaultHour()
+	} else {
+		var err error
+		hour, err = strconv.Atoi(hourStr)
+		if err != nil || hour < 0 || hour > 23 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid hour: must be an integer 0–23"})
+			return
+		}
+	}
+
+	quarter := -1
+	if quarterStr := c.Query("quarter"); quarterStr != "" {
+		q, err := strconv.Atoi(quarterStr)
+		if err != nil || q < 0 || q > 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid quarter: must be an integer 0–3"})
+			return
+		}
+		quarter = q
+	}
+
+	if models.DBHackathon == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
+		return
+	}
+
+	query := `
+SELECT station_uid, station_name, lat, lon, city,
+  ROUND((AVG(available_bikes::float / NULLIF(total_docks,0)) * 100)::numeric, 1) AS availability_pct,
+  ROUND(AVG(available_bikes)::numeric, 0)                                         AS avg_available,
+  MAX(total_docks)                                                                 AS total_docks
+FROM youbike_snapshots
+WHERE (city = $1 OR $1 = 'all')
+  AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2`
+	args := []interface{}{city, hour}
+	if quarter >= 0 {
+		query += `
+  AND (EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) = $3`
+		args = append(args, quarter)
+	}
+	query += `
+GROUP BY station_uid, station_name, lat, lon, city
+ORDER BY availability_pct ASC`
+
+	sqlDB, err := models.DBHackathon.DB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("db error: %v", err)})
+		return
+	}
+
+	rows, err := sqlDB.Query(query, args...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err)})
+		return
+	}
+	defer rows.Close()
+
+	type youbikeMapFeature struct {
+		Type     string `json:"type"`
+		Geometry struct {
+			Type        string    `json:"type"`
+			Coordinates []float64 `json:"coordinates"`
+		} `json:"geometry"`
+		Properties map[string]interface{} `json:"properties"`
+	}
+
+	features := []youbikeMapFeature{}
+
+	for rows.Next() {
+		var (
+			stationUID      string
+			stationName     string
+			lat, lon        float64
+			stationCity     string
+			availabilityPct sql.NullFloat64
+			avgAvailable    sql.NullFloat64
+			totalDocks      sql.NullInt64
+		)
+		if err := rows.Scan(&stationUID, &stationName, &lat, &lon, &stationCity, &availabilityPct, &avgAvailable, &totalDocks); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("scan error: %v", err)})
+			return
+		}
+
+		feat := youbikeMapFeature{
+			Type: "Feature",
+		}
+		feat.Geometry.Type = "Point"
+		feat.Geometry.Coordinates = []float64{lon, lat}
+		feat.Properties = map[string]interface{}{
+			"station_uid":      stationUID,
+			"station_name":     stationName,
+			"city":             stationCity,
+			"availability_pct": availabilityPct.Float64,
+			"avg_available":    int64(avgAvailable.Float64),
+			"total_docks":      totalDocks.Int64,
+		}
+		features = append(features, feat)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("rows error: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"type":     "FeatureCollection",
+		"features": features,
+	})
+}
+
+// GetYouBikeShortage handles GET /api/v1/commute/youbike/shortage
+// Query params: city (Taipei|NewTaipei|all, default all)
+func GetYouBikeShortage(c *gin.Context) {
+	city := c.DefaultQuery("city", "all")
+	if !youbikeValidateCity(city) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid city: must be Taipei, NewTaipei, or all"})
+		return
+	}
+
+	if models.DBHackathon == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
+		return
+	}
+
+	query := `
+SELECT EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int AS hour,
+       city,
+       COUNT(DISTINCT station_uid) FILTER (WHERE available_bikes = 0) AS empty_stations,
+       COUNT(DISTINCT station_uid)                                      AS total_stations
+FROM youbike_snapshots
+WHERE (city = $1 OR $1 = 'all')
+GROUP BY 1, 2
+ORDER BY 1, 2`
+
+	sqlDB, err := models.DBHackathon.DB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("db error: %v", err)})
+		return
+	}
+
+	rows, err := sqlDB.Query(query, city)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err)})
+		return
+	}
+	defer rows.Close()
+
+	// Collect data grouped by city into a map[city][hour] → shortage_pct
+	type hourPoint struct {
+		X string  `json:"x"`
+		Y float64 `json:"y"`
+	}
+	// cityHours holds the computed shortage_pct for each (city, hour) pair seen in DB results.
+	cityHours := make(map[string]map[int]float64)
+	cityOrder := []string{}
+
+	for rows.Next() {
+		var (
+			hour          int
+			rowCity       string
+			emptyStations int64
+			totalStations int64
+		)
+		if err := rows.Scan(&hour, &rowCity, &emptyStations, &totalStations); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("scan error: %v", err)})
+			return
+		}
+		var pct float64
+		if totalStations > 0 {
+			pct = float64(emptyStations) / float64(totalStations) * 100
+			// round to 1 decimal
+			pct = math.Round(pct*10) / 10
+		}
+		if _, exists := cityHours[rowCity]; !exists {
+			cityOrder = append(cityOrder, rowCity)
+			cityHours[rowCity] = make(map[int]float64)
+		}
+		cityHours[rowCity][hour] = pct
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("rows error: %v", err)})
+		return
+	}
+
+	type seriesEntry struct {
+		Name string      `json:"name"`
+		Data []hourPoint `json:"data"`
+	}
+	series := []seriesEntry{}
+	for _, name := range cityOrder {
+		data := make([]hourPoint, 24)
+		for h := 0; h < 24; h++ {
+			pct := 0.0
+			if v, ok := cityHours[name][h]; ok {
+				pct = v
+			}
+			data[h] = hourPoint{X: strconv.Itoa(h), Y: pct}
+		}
+		series = append(series, seriesEntry{Name: name, Data: data})
+	}
+
+	categories := make([]string, 24)
+	for i := 0; i < 24; i++ {
+		categories[i] = strconv.Itoa(i)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"series":     series,
+		"categories": categories,
+	})
+}
+
+// GetYouBikeBlacklist handles GET /api/v1/commute/youbike/blacklist
+// Query params: city (Taipei|NewTaipei|all, default all), limit (int, default 20)
+func GetYouBikeBlacklist(c *gin.Context) {
+	city := c.DefaultQuery("city", "all")
+	if !youbikeValidateCity(city) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid city: must be Taipei, NewTaipei, or all"})
+		return
+	}
+
+	limitStr := c.DefaultQuery("limit", "20")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid limit: must be a positive integer"})
+		return
+	}
+
+	if models.DBHackathon == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
+		return
+	}
+
+	query := `
+SELECT station_name, city,
+  ROUND(COUNT(*) FILTER (WHERE available_bikes=0)*100.0 / NULLIF(COUNT(*),0), 1) AS empty_pct
+FROM youbike_snapshots
+WHERE (city = $1 OR $1 = 'all')
+GROUP BY station_name, city
+HAVING COUNT(*) > 2
+ORDER BY empty_pct DESC
+LIMIT $2`
+
+	sqlDB, err2 := models.DBHackathon.DB()
+	if err2 != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("db error: %v", err2)})
+		return
+	}
+
+	rows, err2 := sqlDB.Query(query, city, limit)
+	if err2 != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err2)})
+		return
+	}
+	defer rows.Close()
+
+	type blacklistEntry struct {
+		X    string  `json:"x"`
+		Y    float64 `json:"y"`
+		City string  `json:"city"`
+	}
+	data := []blacklistEntry{}
+
+	for rows.Next() {
+		var (
+			stationName string
+			rowCity     string
+			emptyPct    sql.NullFloat64
+		)
+		if err := rows.Scan(&stationName, &rowCity, &emptyPct); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("scan error: %v", err)})
+			return
+		}
+		data = append(data, blacklistEntry{
+			X:    stationName,
+			Y:    emptyPct.Float64,
+			City: rowCity,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("rows error: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data})
+}

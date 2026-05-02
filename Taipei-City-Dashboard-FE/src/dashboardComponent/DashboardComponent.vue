@@ -28,6 +28,7 @@ import BarChartWithGoal from "./components/BarChartWithGoal.vue";
 import IconPercentChart from "./components/IconPercentChart.vue";
 import IndicatorChart from "./components/IndicatorChart.vue";
 import TextUnitChart from "./components/TextUnitChart.vue";
+import YouBikeTimeMap from "./components/YouBikeTimeMap.vue";
 
 import MapLegendSvg from "./assets/chart/MapLegend.svg";
 import DistrictChartSvg from "./assets/chart/DistrictChart.svg";
@@ -222,6 +223,8 @@ function returnChartComponent(name, svg) {
 		return svg ? IndicatorChartSvg : IndicatorChart;
 	case "TextUnitChart":
 		return svg ? TextUnitChartSvg : TextUnitChart;
+	case "YouBikeTimeMap":
+		return svg ? MapLegendSvg : YouBikeTimeMap;
 	default:
 		return svg ? MapLegendSvg : MapLegend;
 	}
@@ -239,6 +242,7 @@ function returnChartComponent(name, svg) {
         half: mode === 'half',
         large: mode === 'large',
         preview: mode === 'preview',
+        compact: activeChart === 'YouBikeTimeMap',
       },
     ]"
     :style="style"
@@ -853,6 +857,16 @@ button:hover {
 .mapclosed {
 	max-height: none;
 	height: fit-content;
+}
+
+.compact {
+	height: fit-content !important;
+	max-height: none !important;
+
+	.dashboardcomponent-chart {
+		height: auto;
+		overflow-y: visible;
+	}
 }
 
 .mapopen {

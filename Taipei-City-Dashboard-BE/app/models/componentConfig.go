@@ -83,15 +83,16 @@ type CityComponentScore struct{
 
 // ComponentMap is the model for the component_maps table.
 type ComponentMap struct {
-	ID       int64            `json:"id" gorm:"column:id;autoincrement;primaryKey"`
-	Index    string           `json:"index"      gorm:"column:index;type:varchar;not null"`
-	Title    string           `json:"title"      gorm:"column:title;type:varchar;not null"`
-	Type     string           `json:"type"       gorm:"column:type;type:varchar;not null"`
-	Source   string           `json:"source"     gorm:"column:source;type:varchar;not null"`
-	Size     *string          `json:"size"       gorm:"column:size;type:varchar"`
-	Icon     *string          `json:"icon"       gorm:"column:icon;type:varchar"`
-	Paint    *json.RawMessage `json:"paint" gorm:"column:paint;type:json"`
-	Property *json.RawMessage `json:"property" gorm:"column:property;type:json"`
+	ID          int64            `json:"id" gorm:"column:id;autoincrement;primaryKey"`
+	Index       string           `json:"index"        gorm:"column:index;type:varchar;not null"`
+	Title       string           `json:"title"        gorm:"column:title;type:varchar;not null"`
+	Type        string           `json:"type"         gorm:"column:type;type:varchar;not null"`
+	Source      string           `json:"source"       gorm:"column:source;type:varchar;not null"`
+	ApiEndpoint *string          `json:"api_endpoint" gorm:"column:api_endpoint;type:varchar"`
+	Size        *string          `json:"size"         gorm:"column:size;type:varchar"`
+	Icon        *string          `json:"icon"         gorm:"column:icon;type:varchar"`
+	Paint       *json.RawMessage `json:"paint"        gorm:"column:paint;type:json"`
+	Property    *json.RawMessage `json:"property"     gorm:"column:property;type:json"`
 }
 
 // ComponentChart is the model for the component_charts table.

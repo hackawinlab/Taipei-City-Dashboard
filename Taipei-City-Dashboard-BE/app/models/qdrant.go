@@ -99,7 +99,8 @@ func InitLmSession() *ort.DynamicSession[int64, float32] {
 	ort.SetSharedLibraryPath("/usr/lib/libonnxruntime.so") // 設定共享函式庫路徑
 
 	if err := ort.InitializeEnvironment(); err != nil {
-		log.Fatalf("InitializeEnvironment error: %v", err)
+		log.Printf("InitializeEnvironment error: %v (ONNX unavailable, AI features disabled)", err)
+		return nil
 	}
 
 	// 2) 模型路徑
@@ -138,8 +139,8 @@ func InitTokenizer() *tokenizer.Tokenizer {
     tokenizerPath := filepath.Join(modelDir, "tokenizer.json")
 	tk, err := pretrained.FromFile(tokenizerPath)
     if err != nil {
-        // 啟動時失敗就報警並停止，這比執行中當機好找原因
-        log.Fatalf("Critical: Failed to load tokenizer: %v", err)
+        log.Printf("Failed to load tokenizer: %v (AI search disabled)", err)
+        return nil
     }
     return tk
 }
@@ -209,6 +210,9 @@ func GenVector(inputText string) ([]float32, error) {
 	outputTensors := []*ort.Tensor[float32]{outTensor}
 
 	session := global.LMSession
+	if session == nil {
+		return nil, fmt.Errorf("LM session not initialized (ONNX unavailable)")
+	}
 
 	// 6) 跑一次推論
 	if err := session.Run(inputTensors, outputTensors); err != nil {
