@@ -66,6 +66,8 @@ export const useMapStore = defineStore("map", {
 		currentVisibleLayers: [],
 		// Stores all map configs for all layers (to be used to render popups)
 		mapConfigs: {},
+		// Maps a primary layer ID to its companion sub-layer IDs (e.g. cluster shells)
+		companionLayers: {},
 		// Stores the mapbox map instance
 		map: null,
 		// Store deck.gl layer overlay
@@ -470,17 +472,130 @@ export const useMapStore = defineStore("map", {
 					`${map_config.api_endpoint}?city=all&hour=${taipeiHour}`
 				);
 				if (this.map.getSource(`${map_config.layerId}-source`)) return;
-				this.map.addSource(`${map_config.layerId}-source`, {
+				const cluster = map_config.property?.cluster;
+				const sourceConfig = {
 					type: "geojson",
 					data: res.data,
-				});
+				};
+				if (cluster) {
+					sourceConfig.cluster = true;
+					sourceConfig.clusterMaxZoom = cluster.clusterMaxZoom ?? 14;
+					sourceConfig.clusterRadius = cluster.clusterRadius ?? 50;
+					sourceConfig.clusterProperties = {
+						sum_available: ["+", ["get", "avg_available"]],
+						sum_docks: ["+", ["get", "total_docks"]],
+					};
+				}
+				this.map.addSource(`${map_config.layerId}-source`, sourceConfig);
 				this.addMapLayer(map_config);
+				if (cluster) this.addClusterCompanionLayers(map_config);
 			} catch (e) {
 				console.error("fetchApiGeoJson failed", e);
 				this.loadingLayers = this.loadingLayers.filter(
 					(el) => el !== map_config.layerId
 				);
 			}
+		},
+		// 2b. Add cluster shell + count layers that share a clustered GeoJSON source
+		addClusterCompanionLayers(map_config) {
+			const sourceId = `${map_config.layerId}-source`;
+			const clusterLayerId = `${map_config.layerId}-clusters`;
+			const countLayerId = `${map_config.layerId}-cluster-count`;
+			// Filter the original symbol layer to non-cluster features only
+			if (this.map.getLayer(map_config.layerId)) {
+				this.map.setFilter(map_config.layerId, [
+					"!",
+					["has", "point_count"],
+				]);
+			}
+			// Cluster shells: red/orange/green by aggregate availability ratio,
+			// size scales with point_count
+			this.map.addLayer({
+				id: clusterLayerId,
+				type: "circle",
+				source: sourceId,
+				filter: ["has", "point_count"],
+				paint: {
+					"circle-color": [
+						"case",
+						[
+							"<",
+							[
+								"/",
+								["*", 100, ["get", "sum_available"]],
+								["max", ["get", "sum_docks"], 1],
+							],
+							10,
+						],
+						"#ef4444",
+						[
+							"<",
+							[
+								"/",
+								["*", 100, ["get", "sum_available"]],
+								["max", ["get", "sum_docks"], 1],
+							],
+							30,
+						],
+						"#f97316",
+						"#22c55e",
+					],
+					"circle-radius": [
+						"step",
+						["get", "point_count"],
+						14,
+						20,
+						18,
+						100,
+						24,
+					],
+					"circle-opacity": 0.85,
+					"circle-stroke-width": 2,
+					"circle-stroke-color": "#1a1a1a",
+				},
+			});
+			this.map.addLayer({
+				id: countLayerId,
+				type: "symbol",
+				source: sourceId,
+				filter: ["has", "point_count"],
+				layout: {
+					"text-field": ["get", "point_count_abbreviated"],
+					"text-size": 12,
+					"text-allow-overlap": true,
+					"text-ignore-placement": true,
+				},
+				paint: {
+					"text-color": "#ffffff",
+				},
+			});
+			// Click cluster → zoom to expand it
+			this.map.on("click", clusterLayerId, (e) => {
+				const features = this.map.queryRenderedFeatures(e.point, {
+					layers: [clusterLayerId],
+				});
+				const clusterId = features[0]?.properties?.cluster_id;
+				const src = this.map.getSource(sourceId);
+				if (!src || clusterId == null) return;
+				src.getClusterExpansionZoom(clusterId, (err, zoom) => {
+					if (err) return;
+					this.map.easeTo({
+						center: features[0].geometry.coordinates,
+						zoom,
+					});
+				});
+			});
+			this.map.on("mouseenter", clusterLayerId, () => {
+				this.map.getCanvas().style.cursor = "pointer";
+			});
+			this.map.on("mouseleave", clusterLayerId, () => {
+				this.map.getCanvas().style.cursor = "";
+			});
+			this.companionLayers[map_config.layerId] = [
+				clusterLayerId,
+				countLayerId,
+			];
+			this.currentLayers.push(clusterLayerId, countLayerId);
 		},
 		fetchLocalGeoJson(map_config) {
 			axios
@@ -1834,6 +1949,14 @@ export const useMapStore = defineStore("map", {
 			return;
 		},
 		//  5. Turn on the visibility for a exisiting map layer
+		setLayerWithCompanionsVisibility(mapLayerId, visibility) {
+			this.map.setLayoutProperty(mapLayerId, "visibility", visibility);
+			(this.companionLayers[mapLayerId] || []).forEach((id) => {
+				if (this.map.getLayer(id)) {
+					this.map.setLayoutProperty(id, "visibility", visibility);
+				}
+			});
+		},
 		turnOnMapLayerVisibility(mapLayerId) {
 			if (mapLayerId.indexOf("-arc") !== -1) {
 				this.deckGlLayer[mapLayerId].config.visible = true;
@@ -1866,9 +1989,8 @@ export const useMapStore = defineStore("map", {
 					);
 					this.animateFilter(mapLayerId);
 				} else {
-					this.map.setLayoutProperty(
+					this.setLayerWithCompanionsVisibility(
 						mapLayerId,
-						"visibility",
 						"visible",
 					);
 				}
@@ -1886,12 +2008,10 @@ export const useMapStore = defineStore("map", {
 					this.deckGlLayer[mapLayerId].config.visible = false;
 					this.renderDeckGLLayer();
 				} else if (this.map.getLayer(mapLayerId)) {
-					this.map.setFilter(mapLayerId, null);
-					this.map.setLayoutProperty(
-						mapLayerId,
-						"visibility",
-						"none",
-					);
+					if (!this.companionLayers[mapLayerId]) {
+						this.map.setFilter(mapLayerId, null);
+					}
+					this.setLayerWithCompanionsVisibility(mapLayerId, "none");
 				}
 				this.currentVisibleLayers = this.currentVisibleLayers.filter(
 					(element) => element !== mapLayerId,
@@ -2602,13 +2722,19 @@ export const useMapStore = defineStore("map", {
 		/* Clearing the map */
 		// 1. Called when the user is switching between maps
 		clearOnlyLayers() {
+			// Remove all layers first so shared sources can be released
 			this.currentLayers.forEach((element) => {
-				this.map.removeLayer(element);
+				if (this.map.getLayer(element)) {
+					this.map.removeLayer(element);
+				}
+			});
+			this.currentLayers.forEach((element) => {
 				if (this.map.getSource(`${element}-source`)) {
 					this.map.removeSource(`${element}-source`);
 				}
 			});
 			this.currentLayers = [];
+			this.companionLayers = {};
 			this.mapConfigs = {};
 			this.currentVisibleLayers = [];
 			this.removePopup();
