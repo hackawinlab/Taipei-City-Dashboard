@@ -80,6 +80,8 @@ func InitCronJobs() {
 		return
 	}
 
+	RegisterYouBikeFetcherJob(c)
+
 	c.Start()
 	logs.Info("Cron jobs started.")
 }
