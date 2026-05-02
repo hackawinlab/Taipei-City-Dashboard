@@ -59,12 +59,13 @@ rsync -ah winlab@192.168.10.71:hackathon-pipeline/data/youbike_NewTaipei data/
 1. Creates the `hackathon` database (if missing).
 2. Seeds `dashboardmanager` with the timemap component and the "Youbike Analysis" dashboard.
 3. Initializes the `youbike_snapshots` schema and indexes.
-4. Loads every CSV under `data/youbike_{Taipei,NewTaipei}/`.
+4. Loads every CSV under `data/youbike_{Taipei,NewTaipei}/` into `youbike_snapshots` (history — used by the timemap slider).
 5. Fills missing 15-min slots so every slider tick has data.
+6. Refreshes `tran_ubike_realtime` and `tran_ubike_realtime_new_tpe` in the `dashboard` DB with the latest snapshot per station (one-shot — used by the existing `youbike_availability` donut on the same dashboard tab). Set `SKIP_REALTIME=1` to leave those tables alone.
 
 CSV files are not committed. The script aborts with instructions if `data/` is empty — for a quick demo you can drop a handful of CSVs into the two subdirs and the gap-fill step will project them across all 96 quarter-hour slots.
 
-Useful env overrides: `PG_CONTAINER`, `PG_USER`, `HACKATHON_DB`, `MANAGER_DB`, `DATA_DIR`, `DOCKER`.
+Useful env overrides: `PG_CONTAINER`, `PG_DATA_CONTAINER`, `PG_USER`, `HACKATHON_DB`, `MANAGER_DB`, `DASHBOARD_DB`, `DATA_DIR`, `DOCKER`, `SKIP_REALTIME`.
 
 ### Start the backend
 
