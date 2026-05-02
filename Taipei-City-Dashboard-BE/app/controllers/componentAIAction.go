@@ -97,7 +97,7 @@ func ComponentAIAction(c *gin.Context) {
 			SchemaVersion: componentAIActionSchemaVersion,
 			ComponentID:   input.ComponentID,
 			Mode:          "clarify",
-			Summary:       "目前 AI 操作 prototype 只支援 YouBike 一日可用率動態地圖。",
+			Summary:       "目前 AI 操作 prototype 只支援 Youbike 時序統計。",
 			UIEvents:      []ComponentAIUIEvent{},
 			Insights:      []interface{}{},
 			Followups:     defaultYouBikeFollowups(),
@@ -574,7 +574,7 @@ func stringFollowupsToObjects(items []string) []ComponentAIFollowup {
 }
 
 func youbikeIntentSystemPrompt() string {
-	return `你是 Taipei City Dashboard YouBike 一日可用率動態地圖的 intent parser。
+	return `你是 Taipei City Dashboard Youbike 時序統計的 intent parser。
 你的工作是把使用者請求拆成可執行的 UI 動作。
 
 請只回傳一個 JSON object，不要 markdown，不要解釋文字：

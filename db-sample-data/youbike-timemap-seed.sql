@@ -1,4 +1,4 @@
--- YouBike 一日可用率動態地圖 component seed
+-- Youbike 時序統計 component seed
 -- Run against dashboardmanager DB after dashboardmanager-demo.sql
 
 -- 1. Schema migration (idempotent)
@@ -11,8 +11,8 @@ ON CONFLICT (index) DO NOTHING;
 
 -- 3. Component
 INSERT INTO components (index, name)
-VALUES ('youbike_timemap', 'YouBike 一日可用率動態地圖')
-ON CONFLICT (index) DO NOTHING;
+VALUES ('youbike_timemap', 'Youbike 時序統計')
+ON CONFLICT (index) DO UPDATE SET name = EXCLUDED.name;
 
 -- 4. Map config (api source, symbol layer using bike sprites by availability_pct)
 INSERT INTO component_maps (index, title, type, source, icon, api_endpoint, paint)
