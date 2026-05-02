@@ -28,6 +28,18 @@ const (
 	topNImbalance     = 15
 )
 
+// taipeiLoc localises every snapshot_at the moment we read it from
+// youbike_snapshots (TIMESTAMPTZ → Go time defaults to UTC). All hour-bucket
+// labels and timeline X axes need to land on the Taipei wall clock to match
+// commute.go's `AT TIME ZONE 'Asia/Taipei'` SQL convention.
+var taipeiLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		return time.FixedZone("Asia/Taipei", 8*3600)
+	}
+	return loc
+}()
+
 // Snapshot is one row of the hackathon youbike_snapshots table.
 type Snapshot struct {
 	SnapshotAt     time.Time
@@ -153,8 +165,8 @@ FROM youbike_snapshots`)
 		); err != nil {
 			return nil, err
 		}
-		s.SnapshotAt = ts
-		s.Hour = floorHour(ts)
+		s.SnapshotAt = ts.In(taipeiLoc)
+		s.Hour = floorHour(s.SnapshotAt)
 		s.AvailableBikes = availableBikes.Float64
 		s.ElectricBikes = electricBikes.Float64
 		s.TotalDocks = int(totalDocks.Int64)

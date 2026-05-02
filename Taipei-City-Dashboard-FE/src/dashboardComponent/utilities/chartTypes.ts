@@ -15,6 +15,7 @@ export const chartTypes: chartType = {
 	GuageChart: "量表圖", // V
 	RadarChart: "雷達圖", // V
 	HeatmapChart: "熱力圖", // V
+	ScatterChart: "散佈圖", // V
 	PolarAreaChart: "極座標圖", // V
 	ColumnLineChart: "長條折線圖", // V
 	BarChartWithGoal: "長條圖(目標)", // V
