@@ -106,6 +106,59 @@ function pauseIfPlaying() {
 	if (playing.value) togglePlay();
 }
 
+function getMapBoundsSnapshot() {
+	if (!mapStore.map) return null;
+	const bounds = mapStore.map.getBounds();
+	return {
+		north: bounds.getNorth(),
+		south: bounds.getSouth(),
+		east: bounds.getEast(),
+		west: bounds.getWest(),
+	};
+}
+
+function getComponentState() {
+	return {
+		city_scope: cityFilter.value,
+		current_slot: currentSlot.value,
+		current_time: currentLabel.value,
+		map_bounds: getMapBoundsSnapshot(),
+	};
+}
+
+function applyAIEvent(event) {
+	if (!event || !event.action) return;
+	const payload = event.payload || {};
+	switch (event.action) {
+	case "set_time_slot": {
+		const nextSlot = Number(payload.slot);
+		if (!Number.isInteger(nextSlot) || nextSlot < 0 || nextSlot >= TOTAL_SLOTS) {
+			return;
+		}
+		pauseIfPlaying();
+		currentSlot.value = nextSlot;
+		fetchSlot(nextSlot);
+		break;
+	}
+	case "focus_location": {
+		if (!Array.isArray(payload.center) || payload.center.length !== 2) return;
+		if (!mapStore.map) return;
+		mapStore.easeToLocation([
+			payload.center,
+			payload.zoom || 15,
+			payload.pitch || 45,
+			payload.bearing || 0,
+			payload.place || "AI 指定位置",
+		]);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+defineExpose({ applyAIEvent, getComponentState });
+
 onUnmounted(() => {
 	unmounted = true;
 	clearInterval(playInterval);

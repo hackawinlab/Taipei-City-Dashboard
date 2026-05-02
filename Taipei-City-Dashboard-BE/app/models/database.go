@@ -199,7 +199,7 @@ func ExecuteSQLFile(db *sql.DB, filename string) error {
 		if err != nil {
 			// Rollback the transaction if an error occurs
 			tx.Rollback()
-			logs.FError(err.Error())
+			logs.FError("%s", err.Error())
 		}
 	}
 
