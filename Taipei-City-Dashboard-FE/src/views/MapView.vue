@@ -12,12 +12,13 @@ Testing: Jack Huang (Data Scientist), Ian Huang (Data Analysis Intern)
 
 <script setup>
 /* global gtag */
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import DashboardComponent from "../dashboardComponent/DashboardComponent.vue";
 import { useContentStore } from "../store/contentStore";
 import { useDialogStore } from "../store/dialogStore";
 import { useMapStore } from "../store/mapStore";
+import { useControlBus } from "../composables/useControlBus";
 import MapContainer from "../components/map/MapContainer.vue";
 import MoreInfo from "../components/dialogs/MoreInfo.vue";
 import ReportIssue from "../components/dialogs/ReportIssue.vue";
@@ -136,6 +137,48 @@ function popularBasicLayerGA(map_config) {
 		});
 	}
 }
+
+let unsubscribeToggleLayer = null;
+
+onMounted(() => {
+	unsubscribeToggleLayer = useControlBus().on(
+		"toggle_map_layer",
+		({ index, city, action }) => {
+			// Theme components in currentDashboard.components may have null city; fall back to dashboard city
+			const dashCity = contentStore.currentDashboard?.city;
+			const matches = (c) => c.index === index && (c.city || dashCity) === city;
+			const component = contentStore.availableMapLayerComponents.find(matches);
+			if (!component?.map_config?.[0]) return;
+
+			const isShow = action !== "hide";
+			if (isShow) {
+				mapStore.addToMapLayerList(component.map_config);
+			} else {
+				mapStore.clearByParamFilter(component.map_config);
+				mapStore.turnOffMapLayerVisibility(component.map_config);
+			}
+
+			// Toggle button keys differ by dashboard variant — pick the one actually rendered
+			const groups = contentStore.isMapLayersDashboard
+				? [{ key: "mapLayer", list: contentStore.currentDashboard.components }]
+				: [
+					{ key: "basicLayer", list: contentStore.mapLayers },
+					{ key: "hasMap", list: parseMapLayers.value.hasMap },
+				];
+			for (const { key, list } of groups) {
+				const idx = list?.findIndex(matches) ?? -1;
+				if (idx !== -1) {
+					toggleSwitchBtn(isShow, key, idx);
+					return;
+				}
+			}
+		}
+	);
+});
+
+onUnmounted(() => {
+	unsubscribeToggleLayer?.();
+});
 </script>
 
 <template>
@@ -143,9 +186,7 @@ function popularBasicLayerGA(map_config) {
     <div class="hide-if-mobile">
       <!-- 1. If the dashboard is map-layers -->
       <div
-        v-if="
-          contentStore.currentDashboard.index?.includes('map-layers')
-        "
+        v-if="contentStore.isMapLayersDashboard"
         class="map-charts"
       >
         <DashboardComponent

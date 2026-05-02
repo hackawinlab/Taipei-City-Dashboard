@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tmc/langchaingo/llms"
@@ -33,11 +34,12 @@ func init() {
 }
 
 type AIChatRequest struct {
-	SessionID string                 `json:"session"`
-	UserID    string                 `json:"user_id"`
-	IPAddress string                 `json:"ip_address"`
-	Messages  []llms.MessageContent  `json:"messages"`
-	Params    map[string]interface{} `json:"params"`
+	SessionID   string                 `json:"session"`
+	UserID      string                 `json:"user_id"`
+	IPAddress   string                 `json:"ip_address"`
+	Messages    []llms.MessageContent  `json:"messages"`
+	Params      map[string]interface{} `json:"params"`
+	PageContext control.PageContext    `json:"page_context"`
 }
 
 // ChatWithTWCC handles the AI conversation logic including retries, tool calling loop, and logging.
@@ -218,15 +220,20 @@ func (s *aiSession) injectInstructions() {
 	instruction := fmt.Sprintf("\nSystem Instruction:\n1. Use ONLY: [%s].\n2. NEVER nest tool calls \n3. Arguments MUST be literal values (strings, integers, etc.), never function calls \n4. For dependent tasks, call tools sequentially in separate turns.\n5. If stuck, respond with text.", toolNames)
 
 	for _, t := range s.callOpts.Tools {
-		if t.Function != nil && t.Function.Name == tools.NavigateToDashboardName {
+		if t.Function == nil {
+			continue
+		}
+		switch t.Function.Name {
+		case tools.NavigateToDashboardName:
 			catalogue := DashboardCatalogueMarkdown()
 			if catalogue != "" {
 				instruction += "\n\nYou can suggest the user to navigate to a dashboard by calling navigate_to_dashboard.\nRules:\n- Call navigate_to_dashboard AT MOST ONCE per user message.\n- After the tool call succeeds, ALWAYS reply in Traditional Chinese with one sentence suggesting which dashboard to check, e.g. \"建議您查看「XXX」儀表板，可點擊下方按鈕切換。\" (A button will appear below the message for the user to click.)\n- Do NOT call navigate_to_dashboard again after you have already called it in this turn.\n- Do NOT invent indices; use only indices from the catalogue below.\nCity rule: 台北 / 北市 / 台北市 → \"taipei\"; 雙北 / 新北 / 新北市 → \"metrotaipei\". If unclear, default \"taipei\".\n\nAvailable dashboards:\n" + catalogue
 			}
-			break
+		case tools.ToggleMapLayerName:
+			instruction += buildToggleMapLayerInstruction(s.req.PageContext)
 		}
 	}
-	
+
 	s.currentMessages = make([]llms.MessageContent, 0)
 	merged := false
 	for _, m := range s.req.Messages {
@@ -244,6 +251,51 @@ func (s *aiSession) injectInstructions() {
 			Parts: []llms.ContentPart{llms.TextContent{Text: instruction}},
 		}}, s.currentMessages...)
 	}
+}
+
+func buildToggleMapLayerInstruction(pageCtx control.PageContext) string {
+	if len(pageCtx.AvailableMapLayers) == 0 {
+		return ""
+	}
+
+	nameLookup := make(map[string]string, len(pageCtx.AvailableMapLayers))
+	var catalogue strings.Builder
+	for _, l := range pageCtx.AvailableMapLayers {
+		fmt.Fprintf(&catalogue, "- index=`%s` city=`%s` name=\"%s\"\n", l.Index, l.City, l.Name)
+		nameLookup[l.Index+"|"+l.City] = l.Name
+	}
+
+	openLayersDesc := "（目前沒有開啟任何圖層）"
+	if len(pageCtx.OpenLayers) > 0 {
+		descs := make([]string, 0, len(pageCtx.OpenLayers))
+		for _, ol := range pageCtx.OpenLayers {
+			name := nameLookup[ol.Index+"|"+ol.City]
+			if name == "" {
+				name = ol.Index
+			}
+			descs = append(descs, fmt.Sprintf("「%s」(index=%s, city=%s)", name, ol.Index, ol.City))
+		}
+		openLayersDesc = strings.Join(descs, ", ")
+	}
+
+	return fmt.Sprintf(
+		"\n\n## 地圖圖層工具 (toggle_map_layer)\n"+
+			"使用者目前在地圖交叉對比頁面，預設 city: %s\n\n"+
+			"可用圖層（請只使用以下 (index, city) 組合）：\n%s\n"+
+			"目前已開啟的圖層: %s\n\n"+
+			"何時呼叫工具：\n"+
+			"- 使用者明確要求「開啟/打開/顯示/show」某圖層 → action='show'\n"+
+			"- 使用者明確要求「關閉/隱藏/拿掉/hide」某圖層 → action='hide'\n\n"+
+			"何時「不要」呼叫工具，直接用文字回答：\n"+
+			"- 使用者問「有哪些圖層」「可以控制什麼」「有什麼可以開」之類**列表查詢** → 用繁體中文列出上方「可用圖層」的 name，不要呼叫工具。\n"+
+			"- 使用者問「現在開了哪些」「目前有什麼是開的」之類**狀態查詢** → 用繁體中文列出上方「目前已開啟的圖層」的 name，不要呼叫工具。\n"+
+			"- 使用者只是聊天、確認、追問前一輪內容 → 用文字回答，不要呼叫工具。\n\n"+
+			"其他規則：\n"+
+			"- 呼叫工具時 city 必須跟可用圖層清單裡列出的 city 一致，不要自行替換。\n"+
+			"- 同一輪請求不要重複呼叫相同 (index, city, action)。\n"+
+			"- 工具呼叫成功後，請用繁體中文一句話確認操作，例如「已為您開啟「老年人口分布」圖層。」\n",
+		control.DefaultCity(pageCtx.City), catalogue.String(), openLayersDesc,
+	)
 }
 
 func (s *aiSession) finalize() (*models.AIChatLog, error) {

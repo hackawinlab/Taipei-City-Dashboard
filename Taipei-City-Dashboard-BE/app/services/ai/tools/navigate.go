@@ -50,9 +50,7 @@ func NavigateToDashboard(ctx context.Context, args string) (string, error) {
 	if err := parseArgs(args, &p); err != nil {
 		return "", fmt.Errorf("invalid args: %v", err)
 	}
-	if p.City == "" {
-		p.City = "taipei"
-	}
+	p.City = control.DefaultCity(p.City)
 	if control.HasEventOfAction(ctx, NavigateToDashboardName) {
 		return "Already navigated once this turn. Do not call navigate_to_dashboard again.", nil
 	}

@@ -1,7 +1,11 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import http from "../router/axios";
+import router from "../router/index";
 import { useControlBus } from "../composables/useControlBus";
+import { useContentStore } from "./contentStore";
+import { useMapStore } from "./mapStore";
+import { dedupBy } from "../utils/dedupBy";
 
 export const useChatStore = defineStore('chat', () => {
   	// 預設訊息
@@ -20,6 +24,9 @@ export const useChatStore = defineStore('chat', () => {
 
 	// 聊天 / 搜尋 模式
 	const mode = ref("chat")
+
+	const contentStore = useContentStore();
+	const mapStore = useMapStore();
 
   	// 從 sessionStorage 讀取
   	const savedChatData = JSON.parse(sessionStorage.getItem('chatData')) || [];
@@ -127,31 +134,43 @@ export const useChatStore = defineStore('chat', () => {
 
 		try {
 			const history = chatData.value
-				.filter((m) => !m.isDefault && m.mode === "chat" && !m.streaming && m.content)
+				.filter((m) => !m.isDefault && m.mode === "chat" && !m.streaming && m.content && !m.content.startsWith("(發生錯誤") && m.content !== "tool")
 				.slice(-10)
 				.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
+
+			// mapConfigs is keyed by layerId; reverse-lookup avoids splitting on "-" which would mangle indexes containing "-"
+			const openLayers = dedupBy(
+				mapStore.currentVisibleLayers
+					.map((id) => mapStore.mapConfigs[id])
+					.filter(Boolean)
+					.map((cfg) => ({ index: cfg.index, city: cfg.city })),
+				(l) => `${l.index}:${l.city}`,
+			);
+
+			const availableMapLayers = contentStore.availableMapLayerComponents.map((c) => ({
+				index: c.index,
+				city: c.city,
+				name: c.name,
+			}));
+
+			const pageContext = {
+				route: router.currentRoute.value.path,
+				city: contentStore.currentDashboard?.city || "taipei",
+				open_layers: openLayers,
+				available_map_layers: availableMapLayers,
+			};
 
 			const res = await http.post("/ai/chat/twai", {
 				session: getOrCreateSessionId(),
 				stream: false,
 				messages: history,
+				page_context: pageContext,
 			});
 			const data = res.data?.data ?? {};
 			chatData.value[placeholderIdx].content = data.content || "";
-			const seen = new Set();
-			const navEvents = [];
-			const otherEvents = [];
-			for (const e of (data.control_events ?? [])) {
-				if (e.action === "navigate_to_dashboard") {
-					const key = `${e.payload?.index}:${e.payload?.city}`;
-					if (!seen.has(key)) {
-						seen.add(key);
-						navEvents.push(e);
-					}
-				} else {
-					otherEvents.push(e);
-				}
-			}
+			const allNav = (data.control_events ?? []).filter((e) => e.action === "navigate_to_dashboard");
+			const otherEvents = (data.control_events ?? []).filter((e) => e.action !== "navigate_to_dashboard");
+			const navEvents = dedupBy(allNav, (e) => `${e.payload?.index}:${e.payload?.city}`);
 			if (navEvents.length > 0) {
 				chatData.value[placeholderIdx].button = navEvents.map((e, i) => ({
 					id: i + 1,
