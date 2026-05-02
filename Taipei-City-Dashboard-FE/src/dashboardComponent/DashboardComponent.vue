@@ -144,6 +144,21 @@ function setChartRef(el, item) {
 	if (item === activeChart.value) chartRef.value = el;
 }
 
+function followupLabel(fu) {
+	if (typeof fu === "string") return fu;
+	return fu?.label || fu?.quick_action || "";
+}
+
+function followupAction(fu) {
+	if (typeof fu === "string") return fu;
+	return fu?.quick_action || fu?.label || "";
+}
+
+function areaInsightOf(result) {
+	const list = result?.insights || [];
+	return list.find((i) => i?.kind === "area_availability") || null;
+}
+
 function onAIClick(event) {
 	if (props.mode.includes("map") && !toggleOn.value) {
 		toggleOn.value = true;
@@ -499,6 +514,7 @@ function returnChartComponent(name, svg) {
         <div
           v-if="aiResult"
           class="dashboardcomponent-ai-result"
+          :class="{ 'is-clarify': aiResult.mode === 'clarify' }"
         >
           <p>{{ aiResult.summary }}</p>
           <ul v-if="aiResult.ui_events?.length">
@@ -511,6 +527,27 @@ function returnChartComponent(name, svg) {
                 : `移到 ${event.payload.place}` }}
             </li>
           </ul>
+          <div
+            v-if="areaInsightOf(aiResult)"
+            class="dashboardcomponent-ai-insight"
+            :class="`verdict-${areaInsightOf(aiResult).verdict}`"
+          >
+            <span class="verdict-dot" />
+            <span>{{ areaInsightOf(aiResult).phrasing }}</span>
+          </div>
+          <div
+            v-if="aiResult.followups?.length"
+            class="dashboardcomponent-ai-followups"
+          >
+            <button
+              v-for="(fu, i) in aiResult.followups"
+              :key="`fu-${i}`"
+              :disabled="aiLoading"
+              @click="submitAIAction(followupAction(fu))"
+            >
+              {{ followupLabel(fu) }}
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -1088,6 +1125,57 @@ button:hover {
 		ul {
 			margin: 6px 0 0;
 			padding-left: 18px;
+		}
+
+		&.is-clarify p {
+			color: #ffd479;
+		}
+	}
+
+	&-ai-insight {
+		display: flex;
+		align-items: flex-start;
+		column-gap: 6px;
+		margin-top: 6px;
+		padding: 6px 8px;
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.04);
+		font-size: var(--font-s);
+		color: var(--color-normal-text);
+
+		.verdict-dot {
+			margin-top: 6px;
+			width: 8px;
+			height: 8px;
+			flex: 0 0 8px;
+			border-radius: 50%;
+			background: var(--color-complement-text);
+		}
+
+		&.verdict-easy .verdict-dot { background: #6bd47a; }
+		&.verdict-balanced .verdict-dot { background: #f0c14b; }
+		&.verdict-tight .verdict-dot { background: #ff6b6b; }
+	}
+
+	&-ai-followups {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: 6px;
+
+		button {
+			padding: 3px 8px;
+			border: 1px solid var(--color-border);
+			border-radius: 999px;
+			background: transparent;
+			color: var(--color-complement-text);
+			font-size: var(--font-s);
+			cursor: pointer;
+
+			&:hover:not(:disabled) {
+				color: var(--color-normal-text);
+				border-color: var(--color-highlight);
+			}
 		}
 	}
 

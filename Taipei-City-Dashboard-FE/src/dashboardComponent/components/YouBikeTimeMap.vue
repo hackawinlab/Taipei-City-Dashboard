@@ -150,6 +150,11 @@ function applyAIEvent(event) {
 			payload.bearing || 0,
 			payload.place || "AI 指定位置",
 		]);
+		if (Number.isFinite(payload.radius_meters)) {
+			drawAIHighlight(payload.center, payload.radius_meters, payload.verdict);
+		} else {
+			clearAIHighlight();
+		}
 		break;
 	}
 	default:
@@ -157,12 +162,110 @@ function applyAIEvent(event) {
 	}
 }
 
-defineExpose({ applyAIEvent, getComponentState });
+const HIGHLIGHT_RING_SOURCE = "youbike-ai-highlight-ring";
+const HIGHLIGHT_FILL_LAYER = "youbike-ai-highlight-fill";
+const HIGHLIGHT_LINE_LAYER = "youbike-ai-highlight-line";
+const HIGHLIGHT_CENTER_SOURCE = "youbike-ai-highlight-center-src";
+const HIGHLIGHT_CENTER_LAYER = "youbike-ai-highlight-center";
+
+const VERDICT_COLOR = {
+	easy: "#6bd47a",
+	balanced: "#f0c14b",
+	tight: "#ff6b6b",
+};
+
+function makeRingPolygon(center, radiusMeters, points = 96) {
+	const [lng, lat] = center;
+	const earthMpDegLat = 111000;
+	const dLat = radiusMeters / earthMpDegLat;
+	const cosLat = Math.cos((lat * Math.PI) / 180);
+	const dLng = radiusMeters / (earthMpDegLat * Math.max(cosLat, 0.01));
+	const ring = [];
+	for (let i = 0; i <= points; i++) {
+		const t = (i / points) * 2 * Math.PI;
+		ring.push([lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)]);
+	}
+	return {
+		type: "Feature",
+		geometry: { type: "Polygon", coordinates: [ring] },
+		properties: {},
+	};
+}
+
+function clearAIHighlight() {
+	const map = mapStore.map;
+	if (!map) return;
+	for (const id of [
+		HIGHLIGHT_FILL_LAYER,
+		HIGHLIGHT_LINE_LAYER,
+		HIGHLIGHT_CENTER_LAYER,
+	]) {
+		if (map.getLayer(id)) map.removeLayer(id);
+	}
+	for (const id of [HIGHLIGHT_RING_SOURCE, HIGHLIGHT_CENTER_SOURCE]) {
+		if (map.getSource(id)) map.removeSource(id);
+	}
+}
+
+function drawAIHighlight(center, radiusMeters, verdict) {
+	const map = mapStore.map;
+	if (!map || !Array.isArray(center) || !radiusMeters) return;
+	clearAIHighlight();
+	const color = VERDICT_COLOR[verdict] || "#ffd479";
+
+	map.addSource(HIGHLIGHT_RING_SOURCE, {
+		type: "geojson",
+		data: {
+			type: "FeatureCollection",
+			features: [makeRingPolygon(center, radiusMeters)],
+		},
+	});
+	map.addLayer({
+		id: HIGHLIGHT_FILL_LAYER,
+		type: "fill",
+		source: HIGHLIGHT_RING_SOURCE,
+		paint: { "fill-color": color, "fill-opacity": 0.12 },
+	});
+	map.addLayer({
+		id: HIGHLIGHT_LINE_LAYER,
+		type: "line",
+		source: HIGHLIGHT_RING_SOURCE,
+		paint: { "line-color": color, "line-width": 2 },
+	});
+
+	map.addSource(HIGHLIGHT_CENTER_SOURCE, {
+		type: "geojson",
+		data: {
+			type: "FeatureCollection",
+			features: [
+				{
+					type: "Feature",
+					geometry: { type: "Point", coordinates: center },
+					properties: {},
+				},
+			],
+		},
+	});
+	map.addLayer({
+		id: HIGHLIGHT_CENTER_LAYER,
+		type: "circle",
+		source: HIGHLIGHT_CENTER_SOURCE,
+		paint: {
+			"circle-radius": 7,
+			"circle-color": color,
+			"circle-stroke-color": "#1a1a1a",
+			"circle-stroke-width": 2,
+		},
+	});
+}
+
+defineExpose({ applyAIEvent, getComponentState, clearAIHighlight });
 
 onUnmounted(() => {
 	unmounted = true;
 	clearInterval(playInterval);
 	clearTimeout(debounceTimer);
+	clearAIHighlight();
 });
 </script>
 
