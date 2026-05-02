@@ -455,9 +455,10 @@ LIMIT $2`
 	c.JSON(http.StatusOK, gin.H{"data": data})
 }
 
-// Shortage analysis dashboard payload — built from the same youbike_snapshots
-// table that powers the timemap, then cached in-process for shortageCacheTTL
-// because the aggregation reads ~130k rows and is identical for every caller.
+// Shortage aggregate cache — built from the same youbike_snapshots table that
+// powers the timemap, then cached in-process for shortageCacheTTL because the
+// aggregation reads ~130k rows and is identical for every caller. Shared by
+// GetYouBikePersistenceChart and GetYouBikeImbalanceChart.
 
 const shortageCacheTTL = 60 * time.Second
 
@@ -468,9 +469,7 @@ var (
 )
 
 // getYouBikeAggregatePayload returns the cached aggregate payload, computing
-// it on first call (or cache expiry). Shared by GetYouBikeShortageAnalysis,
-// GetYouBikePersistenceChart, and GetYouBikeImbalanceChart so the three
-// endpoints don't each maintain their own cache.
+// it on first call (or cache expiry).
 //
 // Returns:
 //   - payload: the aggregate result (zero-value on error)
@@ -512,21 +511,6 @@ func getYouBikeAggregatePayload(ctx context.Context) (youbike_aggregate.Payload,
 	shortageCacheMu.Unlock()
 
 	return payload, 0, ""
-}
-
-// GetYouBikeShortageAnalysis handles GET /api/v1/commute/youbike/shortage-analysis.
-//
-// Computes the four blocks the YouBike shortage dashboard reads (timeline_low,
-// bar_persistence, heatmap, imbalance) directly from the hackathon snapshots
-// so the pipeline stays consistent with the timemap (CSV → load script → PG →
-// API), instead of relying on a separately maintained static JSON.
-func GetYouBikeShortageAnalysis(c *gin.Context) {
-	payload, status, errMsg := getYouBikeAggregatePayload(c.Request.Context())
-	if status != 0 {
-		c.JSON(status, gin.H{"message": errMsg})
-		return
-	}
-	c.JSON(http.StatusOK, payload)
 }
 
 // chartTwoDimSeries / chartTwoDimResponse follow the {status, data:[{name,data}], categories}
