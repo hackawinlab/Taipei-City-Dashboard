@@ -2,35 +2,42 @@
 
 ## 目標
 
-把現行純前端的 `youbike-shortage-analysis-{taipei,metrotaipei}` dashboard 收掉，將其中**只**保留兩個敘事核心 block——`youbike_persistence`（長時段缺車站排行）與 `youbike_imbalance`（站點淨流出量排行）——併進已存在於 BE 的 `youbike-analysis-{taipei,metrotaipei}` dashboard。Block 1 (`youbike_rhythm`) 與 Block 4 (`youbike_heatmap`) 不再呈現。
+把現行純前端注入的 `youbike-shortage-analysis-{taipei,metrotaipei}` dashboard 收掉，將其中**只**保留兩個敘事核心 block——`youbike_persistence`（長時段缺車站排行）與 `youbike_imbalance`（站點淨流出量排行）——以「**真實 BE component**」身份併入既有的 `youbike-analysis-{taipei,metrotaipei}` dashboard。Block 1 (`youbike_rhythm`) 與 Block 4 (`youbike_heatmap`) 不再呈現。
 
-## 範圍與不在範圍
+「真實 BE component」表示：兩個 block 在 `components` / `component_charts` / `query_charts` 都有真實的 row，FE 走標準 chart-data 流程取資料，**不再有 `synthetic` 旗標、不再有客戶端注入分支**。
 
-**做這些：**
+## 設計選擇
 
-- 「Youbike Analysis」dashboard 在 SideBar 不變，但內容變成 6 個 component。
-- 兩個被保留的 block 仍由 `/commute/youbike/shortage-analysis` 聚合 API 提供 chart\_data，前端組裝（不寫進 dashboardmanager DB）。
-- 拿掉 SideBar 上的「YouBike 缺車成因分析」分頁。
-- favorite 按鈕的「該 dashboard 不可加入收藏」邏輯，改成「該『component』不可加入收藏」（因為現在 dashboard 是真實 BE dashboard，BE 既有 4 個 component 仍應可收藏；只有兩個合成 block 不能）。
+採用 **api\_endpoint 鏡像 map 模式**：在 `component_charts` 增加 `api_endpoint VARCHAR` 欄位，鏡像 `component_maps.api_endpoint` 的既有規約。FE 在 chart-data fetch loop 看到 `chart_config.api_endpoint` 就改打那條 URL，不打 `/component/{id}/chart`。BE 新增兩條 thin endpoint，內部 reuse `aggregate.Run()` cache，回傳標準 chart-data 形狀。
 
-**不做這些：**
+選此方案的理由：
 
-- 不把這兩個 block seed 進 BE `components` / `component_charts` / `query_charts`（這需要 dashboardmanager DB schema 變更與 chart-data 端點重作，hackathon 階段不必要）。
-- 不動 `/commute/youbike/shortage-analysis` 後端 API 的回傳結構（仍會回傳 `bar_persistence`、`imbalance`、`timeline_low`、`heatmap` 四塊；前端改成只取兩塊即可，BE 留給未來其他用途）。
-- 不動 `STORY-youbike-shortage-dashboard.md` 既有敘事內容（兩個保留的 block 本就是該文件強調的「兩個 block」）；只更新指引段落，把 dashboard index 改成 `youbike-analysis-*`，並註記 block 1/4 已停用。
+1. 跟 `youbike_timemap` 的 `component_maps.api_endpoint` 規約完全一致，引入零個新概念。
+2. 兩個 block 在 `/component/` 列表、admin UI、Qdrant 索引、未來收藏等流程都自動成為 first-class citizen，未來維護者打開 dashboard 看到 6 個 component 都能用標準路徑追到資料來源。
+3. 複雜計算（dispatch\_dependency 拆「自然還車 vs 補車」等）保留在 Go `aggregate.go`，不必硬翻成跨 DB SQL。
+
+代價：BE chart-data 路徑會有兩條（`query_charts.query_chart` SQL 路徑 + `chart_config.api_endpoint` 路徑），但分支已經存在於 map 那邊，不算新增成本。
+
+## 不在範圍
+
+- **不**對 `aggregate.go` 瘦身。雖然之後 rhythm 與 heatmap 不再被前端讀，仍保留計算邏輯與 cache 結構不動，避免 PR scope 失控；下個 PR 再清。對應地 `/commute/youbike/shortage-analysis` 這條 endpoint 也保留（現在沒人讀）。
+- **不**改既有 4 個 BE component 的 chart_config 或 query_charts。
+- **不**處理舊 URL `?index=youbike-shortage-analysis-*` 的相容跳轉，走既有 `setCurrentDashboardAllContent` fallback 路徑（找不到就導去第一個可用 dashboard）。
 
 ## 元件序
 
-「Youbike Analysis」整合後的 component 順序（user pick 過的 (b) 排法）：
+整合後 `youbike-analysis-{taipei,metrotaipei}` 的 `components` 陣列：
 
-1. `youbike_timemap`（id=1，BE）
-2. `youbike_availability`（id=60，BE）
-3. **`youbike_persistence`（id=9002，合成）** ← 新增
-4. **`youbike_imbalance`（id=9004，合成）** ← 新增
-5. `bike_map`（id=217，BE）
-6. `bike_network`（id=213，BE）
+| 順序 | id | index | 來源 |
+|---|---|---|---|
+| 1 | 1   | `youbike_timemap`     | BE（既有） |
+| 2 | 60  | `youbike_availability`| BE（既有） |
+| 3 | **TBD-A** | **`youbike_persistence`** | BE（新增，api\_endpoint 路徑） |
+| 4 | **TBD-B** | **`youbike_imbalance`**   | BE（新增，api\_endpoint 路徑） |
+| 5 | 217 | `bike_map`            | BE（既有） |
+| 6 | 213 | `bike_network`        | BE（既有） |
 
-排序語意：先看「整體現象」（時間軸地圖、可借率），再看「站點細節」（排行、淨流出），最後看「網路結構」（地圖、網路圖）。
+新增的兩個 component id 由 `components` 表序列分配，不寫死；seed SQL 用 `INSERT ... RETURNING id` 抓回再寫進 `dashboards.components` 陣列。
 
 ## 架構
 
@@ -40,51 +47,126 @@
 SideBar tab "Youbike Analysis" (taipei or metrotaipei)
     │
     ▼
-contentStore.setCurrentDashboardAllContent(index = "youbike-analysis-*")
+contentStore.setCurrentDashboardAllContent
     │
     ├─ GET /api/v1/dashboard/youbike-analysis-{taipei|metrotaipei}
-    │       → 4 BE components (timemap, availability, bike_map, bike_network)
+    │       → 6 components（含新增 2 個，chart_config.api_endpoint 帶值）
     │
-    ├─ if isYoubikeAnalysisIndex(index):
-    │      loadYoubikeShortageBlocks(index)
-    │       → GET /api/v1/commute/youbike/shortage-analysis
-    │       → 取 bar_persistence + imbalance 兩塊，組成 [9002, 9004] 兩個合成 component
-    │      splice 進 cityDashboard.components position 2
-    │
-    └─ setCurrentDashboardAllChartData()
-           skip components with `synthetic === true`（chart_data 已預先填好）
+    └─ setCurrentDashboardAllChartData() — 對每個 component:
+          if (chart_config.api_endpoint) {
+              http.get(chart_config.api_endpoint, { params: { city } })
+              → 把 response.data → component.chart_data
+              → if response.categories → component.chart_config.categories
+          } else {
+              http.get(`/component/${id}/chart`, { params: { city, time... } })
+          }
 ```
 
-### 變更清單（檔案層級）
+### 變更清單
+
+#### Backend（Taipei-City-Dashboard-BE）
 
 | 檔案 | 變更 |
 |---|---|
-| `src/store/youbikeShortageBlocks.js` | 拿掉 `YOUBIKE_SHORTAGE_DASHBOARDS`、`isYoubikeShortageIndex`、`getYoubikeShortageDashboard`、Block 1/4 與 dataset 解析（`timeline_low`、`heatmap`）。新增 `isYoubikeAnalysisIndex(index)` 與 `loadYoubikeShortageBlocks(dashboardIndex)`，後者吃 `youbike-analysis-{taipei,metrotaipei}`，回傳 2 個合成 component（每個帶 `synthetic: true`）。 |
-| `src/store/contentStore.js` | 拿掉 `injectYoubikeShortageDashboard`、`loadYoubikeShortageDashboard`、`isYoubikeShortageIndex` 分支。改為在 `setCurrentDashboardAllContent` 取得 BE response 之後、`filterCurrentDashboardContent` 之前，若 `isYoubikeAnalysisIndex(index)` 為真就 splice 兩個合成 block 進去 position 2。`setCurrentDashboardAllChartData` 在迴圈內 `continue` 跳過 `component.synthetic === true` 的元件。 |
-| `src/views/DashboardView.vue` | 兩處 `:favorite-btn` 由 `!isYoubikeShortageIndex(contentStore.currentDashboard.index)` 改為 `!item.synthetic`。拿掉 `isYoubikeShortageIndex` import。 |
-| `STORY-youbike-shortage-dashboard.md` | 文件首段加註：blocks 已併入 `youbike-analysis-*`；資料流圖中 `youbike-shortage-analysis-*` 改為 `youbike-analysis-*`；提到 Block 1（rhythm）與 Block 4（heatmap）已停用、`/commute/youbike/shortage-analysis` 仍提供完整 4 段資料但前端目前只取兩段。 |
-| `Taipei-City-Dashboard-BE/app/youbike_aggregate/aggregate.go` | 該檔目前有一行註解 `// frontend actually reads (see ... youbikeShortageBlocks.js)`；保留，只把指向更新（檔名沒變，仍指 `youbikeShortageBlocks.js`，不需動）。實際上**不動**這支 BE 檔。 |
+| `app/models/componentConfig.go` | `ComponentChart` struct 加上 `ApiEndpoint *string \`json:"api_endpoint" gorm:"column:api_endpoint;type:varchar"\``。 |
+| `app/controllers/commute.go` | 新增 `GetYouBikePersistenceChart`、`GetYouBikeImbalanceChart`。各自 reuse `aggregate.Run()`，依 `?city=taipei|metrotaipei` 對應 dataset key (`Taipei` / `All`)，回傳標準 chart-data 形狀（見下節）。 |
+| `app/routes/router.go` | `configureCommuteRoutes` 增加 `/youbike/persistence`、`/youbike/imbalance` 路由（公開、跟 `/youbike/map` 同層）。 |
 
-### 合成 component 的 favorite 行為
+`/commute/youbike/shortage-analysis` 路由與 controller 保留不動（dead 但無害）；下個 PR 再瘦身。
 
-`isYoubikeShortageIndex(index)` 原本的用意是：「這些 dashboard 是純前端注入的，favorite 端點 BE 不認識，整個 dashboard 都別讓使用者按收藏」。
+#### Database seed（dashboardmanager DB）
 
-整合後：dashboard 本身是真實 BE dashboard，但裡頭混了 2 個合成 component。原本的 dashboard-level 守門變成過嚴（會把 BE 的 4 個 component 一起鎖住）。改成在每個 `<DashboardComponent>` 上以 `!item.synthetic` 判斷，讓 BE 的 4 個 component 仍可收藏，只有合成的 2 個不能。
+新增 `db-sample-data/youbike-shortage-blocks-seed.sql`（idempotent，可重跑），內容：
 
-### chart-data fetch 跳過
+1. `ALTER TABLE component_charts ADD COLUMN IF NOT EXISTS api_endpoint VARCHAR;`
+2. `INSERT INTO component_charts` 兩列：
+   - `youbike_persistence`: types `{BarChart}`, color `{"#ff6b6b"}`, unit `小時`, api\_endpoint `/commute/youbike/persistence`
+   - `youbike_imbalance`:  types `{BarChart}`, color `{"#fb7185"}`, unit `輛`, api\_endpoint `/commute/youbike/imbalance`
+3. `INSERT INTO components` 兩列（用 `RETURNING id` 拿到分配的 id 做後續 step 用）。
+4. `INSERT INTO query_charts` 各兩列（taipei、metrotaipei），`query_type='two_d'`、`query_chart=''`（不會被執行，`api_endpoint` 接管）、其餘元數據（source/short\_desc/long\_desc/use\_case）沿用前端目前文案，移除既有的動態 `tierCounts` 提示與動態 `hours_observed` 提示，改成靜態文案。
+5. 兩個 component 的 id 寫進 `dashboards.youbike-analysis-{taipei,metrotaipei}.components`，依「元件序」表的位置 splice 進現有陣列：`{1, 60, <new persistence>, <new imbalance>, 217, 213}`。
 
-`setCurrentDashboardAllChartData` 是個 for-loop，會對每個 `cityDashboard.components` 的元件 call `/component/{id}/chart`。合成元件 id 是 9002、9004，BE 沒這兩筆，會 404。對應修法：迴圈裡判斷 `if (component.synthetic) continue;`。它們的 `chart_data` 已經在 `loadYoubikeShortageBlocks` 階段填好。
+`scripts/load-ubike-data.sh` 增加一行 `psql ... -f $DASHBOARD_MANAGER_SEED_DIR/youbike-shortage-blocks-seed.sql`，讓乾淨環境的 bootstrap 一次到位。
 
-## 邊界 / 失敗處理
+#### Frontend（Taipei-City-Dashboard-FE）
 
-- `/commute/youbike/shortage-analysis` 失敗：目前 `loadYoubikeShortageDashboard` 會把 `currentDashboard.components` 設成空。整合後我們在 BE response 已成功之後才呼叫聚合 API；若聚合 API 失敗，**只 swallow + log，不影響 BE 4 個 component 顯示**——使用者至少看得到原本的 Youbike Analysis。實作上以 try/catch 包住 `loadYoubikeShortageBlocks` 並讓 splice 步驟略過。
-- 沒登入的使用者：原本就走得到 `youbike-analysis-*`，行為不變。
+| 檔案 | 變更 |
+|---|---|
+| `src/store/contentStore.js` | 拿掉所有 `injectYoubikeShortageDashboard` / `loadYoubikeShortageDashboard` / `isYoubikeShortageIndex` 分支與 import。`setCurrentDashboardAllChartData` 的 for-loop 內把「呼叫 `/component/{id}/chart`」抽成「先看 `component.chart_config?.api_endpoint`，有就 `http.get(api_endpoint, { params: { city } })`，沒有就走原本路徑」。response shape 兩條路徑相同（`{ data, categories? }`），下游處理不變。 |
+| `src/views/DashboardView.vue` | 拿掉 `isYoubikeShortageIndex` import 與兩處 `:favorite-btn` 內的條件——既然已經是真實 BE component，favorite 行為走預設即可。 |
+| `src/store/youbikeShortageBlocks.js` | **整檔刪除。** |
+| `Taipei-City-Dashboard-BE/app/youbike_aggregate/aggregate.go`（註解） | 第 78 行那條註解 `// frontend actually reads (see ... youbikeShortageBlocks.js)` 改指向新的 commute controller。 |
+
+#### 文件
+
+| 檔案 | 變更 |
+|---|---|
+| `STORY-youbike-shortage-dashboard.md` | 標題保留（敘事仍以「缺車成因」為主軸）。第 1 段加註：blocks 已併入 `youbike-analysis-*` dashboard，rhythm/heatmap 兩個輔助 block 已停用（aggregate.go 仍保留計算待瘦身）。資料流圖中 `/commute/youbike/shortage-analysis` 改為 `/commute/youbike/persistence` 與 `/commute/youbike/imbalance` 兩條，dashboard tab 名改為 `youbike-analysis-*`。 |
+| `CLAUDE.md` | "Implemented Features" 區塊已記載 timemap，加上一段說明 `component_charts.api_endpoint` 規約：與 `component_maps.api_endpoint` 同模式，FE 在 chart-data fetch 看到此欄位就改打該 URL；URL 約定不含 `/api` 前綴（用 `http` instance fetch，baseURL 已有 `/api`）。 |
+
+### Endpoint 形狀
+
+`GET /api/v1/commute/youbike/persistence?city=taipei|metrotaipei`
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "name": "缺車時數（小時）",
+      "data": [
+        { "x": "中正紀念堂(3號出口)", "y": 18 },
+        { "x": "捷運大直站(2號出口)", "y": 17 },
+        ...
+      ]
+    }
+  ],
+  "categories": ["中正紀念堂(3號出口)", "捷運大直站(2號出口)", ...]
+}
+```
+
+`GET /api/v1/commute/youbike/imbalance?city=taipei|metrotaipei` — 同形狀，`name` = `"估計淨流出量"`、`y` = `-imbalance`（保留現行符號慣例：流出為正），`data` / `categories` 取前 15 站。
+
+兩條 endpoint 對應 city query：
+
+| `?city=` 值 | 用 `aggregate.Run()` 哪個切片 |
+|---|---|
+| `taipei` (預設) | `Taipei` |
+| `metrotaipei` | `All`（雙北合計） |
+
+回傳形狀對齊 BE `componentData.go` 的 `three_d` 結構（top-level `data` + `categories`），讓 FE 既有 `setCurrentDashboardAllChartData` 對 `response.data.categories` 的處理可直接套用。
+
+### Schema migration
+
+`component_charts.api_endpoint` 用 `ADD COLUMN IF NOT EXISTS` 在 seed SQL 內 idempotent 加。GORM `AutoMigrate(&ComponentChart{}, ...)` 也會自動補欄位（`models/database.go:153`），但 seed 已先處理，效果一致。
+
+### 失敗處理
+
+`/commute/youbike/persistence` 或 `/imbalance` 請求失敗：走 `setCurrentDashboardAllChartData` 既有 catch（line 360-369），把 `chart_data` 設成空陣列、log 錯誤、不影響其他 component。**這比舊版好**——舊版聚合 API 失敗會把 4 個 block 一起變空；現在每個 component 獨立 fetch，影響範圍縮到 1 個。
+
+### 回應 cache
+
+`aggregate.Run()` 既有 LRU cache（看 `aggregate.go`），兩條新 endpoint 共用同一份 cache，重複 fetch 不會重算。Cache key 含 city，`taipei` 與 `metrotaipei` 兩個 city dashboard 開啟時最多算一次（雙北切片永遠包含 Taipei 切片所需資料）。
 
 ## 驗證步驟
 
-1. `docker restart dashboard-be`（如有改 BE，本案沒改可省略）+ FE 走 dev mode。
-2. 進入 SideBar → 臺北 → **Youbike Analysis**：應依序看到 6 個 component（timemap、availability、persistence、imbalance、bike\_map、bike\_network）。
-3. SideBar **不應**再有「YouBike 缺車成因分析」分頁。
-4. 直接以 query string 走舊 URL `?index=youbike-shortage-analysis-taipei&city=taipei`：應 fallback 到第一個可用 dashboard（`setCurrentDashboardAllContent` 在找不到 currentDashboardInfo 時的既有行為）。
-5. 收藏按鈕：在 `youbike-analysis-*` 下，BE 的 4 個 component 收藏按鈕**可見**；合成的 persistence、imbalance 兩個收藏按鈕**不可見**。
-6. 雙北版（metrotaipei）：persistence 與 imbalance 應顯示 All（雙北合計）資料，且其 city 下拉可切到 Taipei single slice。
+1. 對 dashboardmanager DB 跑新 seed，確認：
+   - `component_charts` 兩列存在、`api_endpoint` 有值
+   - `components` 兩列存在、id 拿得到
+   - `dashboards.youbike-analysis-{taipei,metrotaipei}.components` 已 splice 6 個 id 在正確位置
+2. `docker restart dashboard-be`（BE 有改 Go），FE dev server。
+3. 直接打 endpoint 驗證：
+   ```
+   curl 'http://localhost:8080/api/v1/commute/youbike/persistence?city=taipei' | jq
+   curl 'http://localhost:8080/api/v1/commute/youbike/imbalance?city=metrotaipei' | jq
+   ```
+   兩條都應回 `{status: success, data: [{name, data: [{x, y}, ...]}], categories: [...]}`。
+4. 進入 SideBar → 臺北 → **Youbike Analysis**：應依序看到 6 個 component（timemap、availability、persistence、imbalance、bike\_map、bike\_network）。雙北版（metrotaipei）同樣 6 個。
+5. SideBar **不應**再有「YouBike 缺車成因分析」分頁。
+6. 打開瀏覽器 DevTools Network：persistence/imbalance 兩個 component 的 request URL 應分別命中 `/api/commute/youbike/persistence` 與 `/api/commute/youbike/imbalance`，**不**是 `/component/{id}/chart`。
+7. 收藏按鈕在 6 個 component 上都應出現（無 `synthetic` 過濾）。實際打 favorite endpoint 對新增的兩個 component 不在本 PR 範圍驗證——如要驗，要加進「我的最愛」dashboard 並重整看 chart_data fetch 是否仍正常（會走 api\_endpoint）。
+
+## TODO（不在本 PR）
+
+- 瘦身 `aggregate.go`：移除 rhythm 與 heatmap 區段、刪除 `/commute/youbike/shortage-analysis` 路由。
+- 把 BE 的 `component_maps.api_endpoint` 與 `component_charts.api_endpoint` 兩處 URL 規約統一（前者目前帶 `/api` 前綴、後者不帶）。
