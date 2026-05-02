@@ -921,25 +921,29 @@ export const useContentStore = defineStore("content", {
 				index < dialogStore.moreInfoContent.length;
 				index++
 			) {
-				const response_2 = await http.get(
-					`/component/${dialogStore.moreInfoContent[index].id}/chart`,
-					{
-						params: {
-							city: dialogStore.moreInfoContent[index].city,
-							...(!["static", "current", "demo"].includes(
-								dialogStore.moreInfoContent[index].time_from,
-							)
-								? getComponentDataTimeframe(
-										dialogStore.moreInfoContent[index]
-											.time_from,
-										dialogStore.moreInfoContent[index]
-											.time_to,
-										true,
+				const item = dialogStore.moreInfoContent[index];
+				const apiEndpoint = item.chart_config?.api_endpoint;
+				const response_2 = apiEndpoint
+					? await http.get(apiEndpoint, {
+							params: { city: item.city },
+						})
+					: await http.get(
+							`/component/${item.id}/chart`,
+							{
+								params: {
+									city: item.city,
+									...(!["static", "current", "demo"].includes(
+										item.time_from,
 									)
-								: {}),
-						},
-					},
-				);
+										? getComponentDataTimeframe(
+												item.time_from,
+												item.time_to,
+												true,
+											)
+										: {}),
+								},
+							},
+						);
 
 				dialogStore.moreInfoContent[index].chart_data =
 					response_2.data.data;
