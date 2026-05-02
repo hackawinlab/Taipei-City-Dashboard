@@ -145,6 +145,8 @@ go run main.go initDashboard    # Seed dashboard sample data
 go build -v ./...               # Build check (used in CI)
 ```
 
+`migrateDB` needs `DASHBOARD_DEFAULT_USERNAME`, `DASHBOARD_DEFAULT_Email`, and `DASHBOARD_DEFAULT_PASSWORD` set in addition to the DB env vars — without them the admin-user step silently no-ops (FK errors with `auth_user_id=0`) and `auth_users` ends up empty. Defaults from `docker/.env`: `admin` / `admin@example.com` / `Admin123!`.
+
 No dedicated test suite; CI runs `go build`.
 
 ### Docker (full-stack alternative)
