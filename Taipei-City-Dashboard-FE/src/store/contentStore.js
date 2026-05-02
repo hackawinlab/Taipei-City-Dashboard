@@ -17,7 +17,9 @@ import { useAuthStore } from "./authStore";
 import { getComponentDataTimeframe } from "../assets/utilityFunctions/dataTimeframe";
 import { CityManager } from "../dashboardComponent/utilities/cityManager";
 import {
-	YOUBIKE_SHORTAGE_DASHBOARD,
+	YOUBIKE_SHORTAGE_DASHBOARDS,
+	isYoubikeShortageIndex,
+	getYoubikeShortageDashboard,
 	loadYoubikeShortageComponents,
 } from "./youbikeShortageBlocks";
 
@@ -88,26 +90,30 @@ export const useContentStore = defineStore("content", {
 		setMapLayerData(index, component) {
 			this.mapLayers[index] = component;
 		},
-		// Inject local YouBike 缺車分析 dashboard into 雙北 list (idempotent)
+		// Inject local YouBike 缺車分析 dashboards into each city list (idempotent).
+		// 仿 production：臺北版掛 taipei 群組、雙北版掛 metrotaipei 群組。
 		injectYoubikeShortageDashboard() {
-			const cityKey = YOUBIKE_SHORTAGE_DASHBOARD.city;
-			const list = this.dashboards.get(cityKey) ?? [];
-			if (list.find((d) => d.index === YOUBIKE_SHORTAGE_DASHBOARD.index)) {
+			YOUBIKE_SHORTAGE_DASHBOARDS.forEach((d) => {
+				const list = this.dashboards.get(d.city) ?? [];
+				if (list.find((item) => item.index === d.index)) {
+					return;
+				}
+				list.unshift({ index: d.index, name: d.name, icon: d.icon });
+				this.dashboards.set(d.city, list);
+			});
+		},
+		// Load a YouBike 缺車分析 dashboard from local JSON (skip BE)
+		async loadYoubikeShortageDashboard(index) {
+			const dashboard = getYoubikeShortageDashboard(index);
+			if (!dashboard) {
+				this.error = true;
+				this.loading = false;
 				return;
 			}
-			list.unshift({
-				index: YOUBIKE_SHORTAGE_DASHBOARD.index,
-				name: YOUBIKE_SHORTAGE_DASHBOARD.name,
-				icon: YOUBIKE_SHORTAGE_DASHBOARD.icon,
-			});
-			this.dashboards.set(cityKey, list);
-		},
-		// Load YouBike 缺車分析 dashboard from local JSON (skip BE)
-		async loadYoubikeShortageDashboard() {
-			this.currentDashboard.name = YOUBIKE_SHORTAGE_DASHBOARD.name;
-			this.currentDashboard.icon = YOUBIKE_SHORTAGE_DASHBOARD.icon;
+			this.currentDashboard.name = dashboard.name;
+			this.currentDashboard.icon = dashboard.icon;
 			try {
-				const components = await loadYoubikeShortageComponents();
+				const components = await loadYoubikeShortageComponents(index);
 				this.cityDashboard.components = components;
 				this.filterCurrentDashboardContent();
 			} catch (error) {
@@ -254,10 +260,8 @@ export const useContentStore = defineStore("content", {
 		// 3. Call an API to get all component info of the current index dashboard not filtered by city and store it
 		async setCurrentDashboardAllContent() {
 			// Local injected dashboard: skip BE and load from local JSON
-			if (
-				this.currentDashboard.index === YOUBIKE_SHORTAGE_DASHBOARD.index
-			) {
-				await this.loadYoubikeShortageDashboard();
+			if (isYoubikeShortageIndex(this.currentDashboard.index)) {
+				await this.loadYoubikeShortageDashboard(this.currentDashboard.index);
 				return;
 			}
 
