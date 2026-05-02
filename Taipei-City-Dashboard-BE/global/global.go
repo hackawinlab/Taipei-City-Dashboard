@@ -136,6 +136,11 @@ var (
 
 	LMSession *ort.DynamicSession[int64, float32]
 	LMTokenizer *tokenizer.Tokenizer
+
+	// Bus Congestion
+	TDXClientID     = getEnv("TDX_CLIENT_ID", "")
+	TDXClientSecret = getEnv("TDX_CLIENT_SECRET", "")
+	BusFEPublicDir  = getEnv("BUS_FE_PUBLIC_DIR", "")
 )
 
 func init() {
