@@ -2174,7 +2174,15 @@ export const useMapStore = defineStore("map", {
 			const coords =
 				feature.geometry?.coordinates ?? [lngLat.lng, lngLat.lat];
 
-			this.popup = new mapboxGl.Popup({ maxWidth: "360px" })
+			// anchor "top" pins the popup's top edge to the click point so the
+			// chart drops down below the station marker. Without this, Mapbox
+			// auto-picks based on room and the popup pops upward when the
+			// click is in the lower half of the map.
+			this.popup = new mapboxGl.Popup({
+				maxWidth: "360px",
+				anchor: "top",
+				offset: 12,
+			})
 				.setLngLat(coords)
 				.setHTML('<div id="vue-popup-content"></div>')
 				.addTo(this.map);
