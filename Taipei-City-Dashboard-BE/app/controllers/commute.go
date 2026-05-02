@@ -467,43 +467,41 @@ var (
 	shortageCachedResult youbike_aggregate.Payload
 )
 
-// GetYouBikeShortageAnalysis handles GET /api/v1/commute/youbike/shortage-analysis.
+// getYouBikeAggregatePayload returns the cached aggregate payload, computing
+// it on first call (or cache expiry). Shared by GetYouBikeShortageAnalysis,
+// GetYouBikePersistenceChart, and GetYouBikeImbalanceChart so the three
+// endpoints don't each maintain their own cache.
 //
-// Computes the four blocks the YouBike shortage dashboard reads (timeline_low,
-// bar_persistence, heatmap, imbalance) directly from the hackathon snapshots
-// so the pipeline stays consistent with the timemap (CSV → load script → PG →
-// API), instead of relying on a separately maintained static JSON.
-func GetYouBikeShortageAnalysis(c *gin.Context) {
+// Returns:
+//   - payload: the aggregate result (zero-value on error)
+//   - status:  HTTP status code to return on error (0 means OK)
+//   - errMsg:  user-facing error message (empty when status==0)
+func getYouBikeAggregatePayload(ctx context.Context) (youbike_aggregate.Payload, int, string) {
 	if models.DBHackathon == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
-		return
+		return youbike_aggregate.Payload{}, http.StatusServiceUnavailable, "hackathon database not available"
 	}
 
 	shortageCacheMu.Lock()
 	if !shortageCachedAt.IsZero() && time.Since(shortageCachedAt) < shortageCacheTTL {
 		cached := shortageCachedResult
 		shortageCacheMu.Unlock()
-		c.JSON(http.StatusOK, cached)
-		return
+		return cached, 0, ""
 	}
 	shortageCacheMu.Unlock()
 
 	sqlDB, err := models.DBHackathon.DB()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("db error: %v", err)})
-		return
+		return youbike_aggregate.Payload{}, http.StatusInternalServerError, fmt.Sprintf("db error: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	loadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	snapshots, err := youbike_aggregate.LoadFromDB(ctx, sqlDB)
+	snapshots, err := youbike_aggregate.LoadFromDB(loadCtx, sqlDB)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("load error: %v", err)})
-		return
+		return youbike_aggregate.Payload{}, http.StatusInternalServerError, fmt.Sprintf("load error: %v", err)
 	}
 	if len(snapshots) == 0 {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "youbike_snapshots is empty — run scripts/load-ubike-data.sh first"})
-		return
+		return youbike_aggregate.Payload{}, http.StatusServiceUnavailable, "youbike_snapshots is empty — run scripts/load-ubike-data.sh first"
 	}
 
 	payload := youbike_aggregate.BuildPayload(snapshots)
@@ -513,5 +511,124 @@ func GetYouBikeShortageAnalysis(c *gin.Context) {
 	shortageCachedResult = payload
 	shortageCacheMu.Unlock()
 
+	return payload, 0, ""
+}
+
+// GetYouBikeShortageAnalysis handles GET /api/v1/commute/youbike/shortage-analysis.
+//
+// Computes the four blocks the YouBike shortage dashboard reads (timeline_low,
+// bar_persistence, heatmap, imbalance) directly from the hackathon snapshots
+// so the pipeline stays consistent with the timemap (CSV → load script → PG →
+// API), instead of relying on a separately maintained static JSON.
+func GetYouBikeShortageAnalysis(c *gin.Context) {
+	payload, status, errMsg := getYouBikeAggregatePayload(c.Request.Context())
+	if status != 0 {
+		c.JSON(status, gin.H{"message": errMsg})
+		return
+	}
 	c.JSON(http.StatusOK, payload)
+}
+
+// chartTwoDimSeries / chartTwoDimResponse mirror the standard /component/:id/chart
+// response shape (componentData.go's TwoDimensionalDataOutput) so frontend
+// chart-data plumbing can consume api_endpoint replies without branching.
+type chartTwoDimSeries struct {
+	Name string             `json:"name"`
+	Data []chartTwoDimPoint `json:"data"`
+}
+
+type chartTwoDimPoint struct {
+	X string  `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type chartTwoDimResponse struct {
+	Status     string              `json:"status"`
+	Data       []chartTwoDimSeries `json:"data"`
+	Categories []string            `json:"categories"`
+}
+
+// resolveYouBikeAggregateCity maps the dashboard's "?city=" query param onto
+// the dataset key used inside aggregate.Payload (Taipei | NewTaipei | All).
+//   - "taipei"        → "Taipei"
+//   - "metrotaipei"   → "All" (the dual-city slice)
+//   - empty / other   → "Taipei"
+func resolveYouBikeAggregateCity(c *gin.Context) string {
+	switch c.DefaultQuery("city", "taipei") {
+	case "metrotaipei":
+		return "All"
+	default:
+		return "Taipei"
+	}
+}
+
+// GetYouBikePersistenceChart handles GET /api/v1/commute/youbike/persistence.
+//
+// Returns the chronic-shortage station ranking for the requested city slice
+// in the standard chart-data response shape, so it can be consumed by frontend
+// components whose component_charts.api_endpoint points here.
+//
+// Top 20 stations sorted by empty-hour ratio (desc), as built by
+// aggregate.buildBarPersistence; y is the integer "empty hours" count.
+func GetYouBikePersistenceChart(c *gin.Context) {
+	payload, status, errMsg := getYouBikeAggregatePayload(c.Request.Context())
+	if status != 0 {
+		c.JSON(status, gin.H{"message": errMsg})
+		return
+	}
+
+	cityKey := resolveYouBikeAggregateCity(c)
+	rows := payload.BarPersistence[cityKey]
+	const persistenceTopN = 20
+	if len(rows) > persistenceTopN {
+		rows = rows[:persistenceTopN]
+	}
+
+	points := make([]chartTwoDimPoint, 0, len(rows))
+	categories := make([]string, 0, len(rows))
+	for _, r := range rows {
+		points = append(points, chartTwoDimPoint{X: r.StationName, Y: float64(r.EmptyHours)})
+		categories = append(categories, r.StationName)
+	}
+
+	c.JSON(http.StatusOK, chartTwoDimResponse{
+		Status:     "success",
+		Data:       []chartTwoDimSeries{{Name: "缺車時數（小時）", Data: points}},
+		Categories: categories,
+	})
+}
+
+// GetYouBikeImbalanceChart handles GET /api/v1/commute/youbike/imbalance.
+//
+// Returns the borrow/return-imbalance ranking (top 15 stations by absolute
+// imbalance) for the requested city slice in the standard chart-data response
+// shape. y is the *negated* imbalance — preserving the frontend convention
+// where "outflow" reads as a positive bar going right.
+func GetYouBikeImbalanceChart(c *gin.Context) {
+	payload, status, errMsg := getYouBikeAggregatePayload(c.Request.Context())
+	if status != 0 {
+		c.JSON(status, gin.H{"message": errMsg})
+		return
+	}
+
+	cityKey := resolveYouBikeAggregateCity(c)
+	cityBlock := payload.Imbalance[cityKey]
+	rows := cityBlock["absolute"]
+	const imbalanceTopN = 15
+	if len(rows) > imbalanceTopN {
+		rows = rows[:imbalanceTopN]
+	}
+
+	points := make([]chartTwoDimPoint, 0, len(rows))
+	categories := make([]string, 0, len(rows))
+	for _, r := range rows {
+		points = append(points, chartTwoDimPoint{X: r.StationName, Y: float64(-r.Imbalance)})
+		categories = append(categories, r.StationName)
+	}
+
+	c.JSON(http.StatusOK, chartTwoDimResponse{
+		Status:     "success",
+		Data:       []chartTwoDimSeries{{Name: "估計淨流出量", Data: points}},
+		Categories: categories,
+	})
 }

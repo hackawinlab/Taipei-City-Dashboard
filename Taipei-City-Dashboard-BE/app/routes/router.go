@@ -219,6 +219,8 @@ func configureCommuteRoutes() {
 		commuteRoutes.GET("/youbike/blacklist", controllers.GetYouBikeBlacklist)
 		commuteRoutes.GET("/youbike/station/:uid/hourly", controllers.GetYouBikeStationHourly)
 		commuteRoutes.GET("/youbike/shortage-analysis", controllers.GetYouBikeShortageAnalysis)
+		commuteRoutes.GET("/youbike/persistence", controllers.GetYouBikePersistenceChart)
+		commuteRoutes.GET("/youbike/imbalance", controllers.GetYouBikeImbalanceChart)
 	}
 }
 
