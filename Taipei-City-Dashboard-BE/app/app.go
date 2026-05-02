@@ -16,8 +16,11 @@ import (
 	"TaipeiCityDashboardBE/app/middleware"
 	"TaipeiCityDashboardBE/app/models"
 	"TaipeiCityDashboardBE/app/routes"
+	bus_congestion "TaipeiCityDashboardBE/app/services/bus_congestion"
 	"TaipeiCityDashboardBE/global"
 	"TaipeiCityDashboardBE/logs"
+	"context"
+	"time"
 
 	"github.com/fvbock/endless"
 	"github.com/gin-gonic/gin"
@@ -34,6 +37,13 @@ func StartApplication() {
 	models.ConnectToDatabases("MANAGER", "DASHBOARD")
 	cache.ConnectToRedis()
 	initial.InitCronJobs()
+
+	// Init bus congestion service (load stop metadata)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		bus_congestion.Service.Init(ctx)
+	}()
 
 	global.LMSession = models.InitLmSession()
 	global.LMTokenizer = models.InitTokenizer()

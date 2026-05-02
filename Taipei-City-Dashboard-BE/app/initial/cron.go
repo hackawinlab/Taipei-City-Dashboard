@@ -4,6 +4,7 @@ package initial
 import (
 	"TaipeiCityDashboardBE/app/cache"
 	"TaipeiCityDashboardBE/app/models"
+	bus_congestion "TaipeiCityDashboardBE/app/services/bus_congestion"
 	"TaipeiCityDashboardBE/logs"
 	"context" // Add context import
 	"time"
@@ -78,6 +79,36 @@ func InitCronJobs() {
 	if err != nil {
 		logs.Error("Failed to add chatlog cleanup cron job:", err)
 		return
+	}
+
+	// Poll ETA every 2 minutes (6-field format: sec min hour dom month dow, required by WithSeconds())
+	_, err = c.AddFunc("0 */2 * * * *", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		bus_congestion.Service.Poll(ctx)
+	})
+	if err != nil {
+		logs.Error("Failed to add bus_congestion_poll cron job:", err)
+	}
+
+	// Refresh map every 5 minutes
+	_, err = c.AddFunc("0 */5 * * * *", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		bus_congestion.Service.RefreshMap(ctx)
+	})
+	if err != nil {
+		logs.Error("Failed to add bus_congestion_map cron job:", err)
+	}
+
+	// Refresh stop metadata daily
+	_, err = c.AddFunc("@daily", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		bus_congestion.Service.RefreshStops(ctx)
+	})
+	if err != nil {
+		logs.Error("Failed to add bus_congestion_refresh_stops cron job:", err)
 	}
 
 	c.Start()
