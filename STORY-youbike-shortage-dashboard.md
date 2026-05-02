@@ -150,10 +150,9 @@
    - `absolute`：依 `imbalance` 升冪（最負在前）取前 15 → 預設前端顯示
    - `per_dock`：先過濾 `total_docks ≥ 10`，再依 `imbalance_per_dock` 升冪取前 15（避免大站永遠霸榜）
 
-5. **前端轉換**（`youbikeShortageBlocks.js`）
-   - 顯示值 `y = -imbalance`（把負的「淨流入」翻成正數的「淨流出量」更直觀）
-   - 圖表副標統計三類補車依賴的站數分布
-   - `dispatch_dependency` 分桶：
+5. **後端轉換**（`commute.go` 的 `GetYouBikeImbalanceChart`）
+   - 顯示值 `y = -imbalance`（在 controller 把負的「淨流入」翻成正數的「淨流出量」更直觀）
+   - `dispatch_dependency` 分桶仍由 aggregate 產出（保留在 `ImbalanceRow` JSON 欄位），整合後的 chart-data 端點目前未把這份分桶帶上副標：
      ```
      ≥ 0.70 → 高補車依賴
      ≥ 0.40 → 中補車依賴
@@ -165,7 +164,7 @@
 - 圖表類型：`BarChart`（橫向長條，與 Block 1 視覺一致）
 - X 軸：站點名稱（前 15 名）
 - Y 軸：估計淨流出量（單位：輛）
-- 副標：`「補車依賴度分布：高補車依賴 X 站、中補車依賴 Y 站、低補車依賴 Z 站」`
+- 副標：整合進 Youbike Analysis 後不再帶補車依賴度副標（chart-data 端點僅回 `name + data + categories`）；補車依賴度分布在後端 `ImbalanceRow` JSON 仍可取得，待 dashboard 副標機制統一後再恢復顯示
 
 ### 3.5 怎麼讀（補車依賴度分群）
 
