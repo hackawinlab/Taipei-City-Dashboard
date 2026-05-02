@@ -237,8 +237,11 @@ onMounted(async () => {
 	font-size: var(--font-s, 12px);
 
 	&-header {
-		margin: 8px 4px 4px 4px;
-		text-align: center;
+		min-height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 4px;
 
 		.station-name {
 			font-weight: 600;
