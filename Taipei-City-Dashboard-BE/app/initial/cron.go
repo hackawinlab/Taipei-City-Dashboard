@@ -81,6 +81,8 @@ func InitCronJobs() {
 		return
 	}
 
+	RegisterYouBikeFetcherJob(c)
+
 	// Poll ETA every 2 minutes (6-field format: sec min hour dom month dow, required by WithSeconds())
 	_, err = c.AddFunc("0 */2 * * * *", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)

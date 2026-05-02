@@ -15,6 +15,7 @@ import router from "../router";
 import { useContentStore } from "../store/contentStore";
 import { useDialogStore } from "../store/dialogStore";
 import { useAuthStore } from "../store/authStore";
+import { isYoubikeShortageIndex } from "../store/youbikeShortageBlocks";
 
 import MoreInfo from "../components/dialogs/MoreInfo.vue";
 import ReportIssue from "../components/dialogs/ReportIssue.vue";
@@ -86,7 +87,7 @@ function handleMoreInfo(item) {
       :select-btn-disabled="contentStore.cityManager.getSelectList(contentStore.currentDashboard?.city).length === 1"
       :select-btn-list="contentStore.cityManager.getSelectList(contentStore.currentDashboard?.city)"
       :city-tag="contentStore.cityManager.getTagList(contentStore.currentDashboard?.city)"
-      :favorite-btn="authStore.token ? true : false"
+      :favorite-btn="authStore.token && !isYoubikeShortageIndex(contentStore.currentDashboard.index)"
       :is-favorite="contentStore.favorites?.components.includes(item.id)"
       @favorite="
         (id) => {
@@ -145,7 +146,8 @@ function handleMoreInfo(item) {
       "
       :favorite-btn="
         authStore.token &&
-          contentStore.currentDashboard.icon !== 'favorite'
+          contentStore.currentDashboard.icon !== 'favorite' &&
+          !isYoubikeShortageIndex(contentStore.currentDashboard.index)
       "
       :is-favorite="contentStore.favorites?.components.includes(item.id)"
       @favorite="

@@ -25,6 +25,7 @@ const heatmapData = computed(() => {
 	let output = {};
 	let highest = 0;
 	let sum = 0;
+	let count = 0;
 	if (props.series.length === 1) {
 		props.series[0].data.forEach((item) => {
 			output[item.x] = item.y;
@@ -32,6 +33,7 @@ const heatmapData = computed(() => {
 				highest = item.y;
 			}
 			sum += item.y;
+			count += 1;
 		});
 	} else {
 		props.series.forEach((serie) => {
@@ -39,9 +41,12 @@ const heatmapData = computed(() => {
 				if (!output[props.chart_config.categories[i]]) {
 					output[props.chart_config.categories[i]] = 0;
 				}
-				output[props.chart_config.categories[i]] += +serie.data[i];
-
-				if (+serie.data[i] > highest) highest = +serie.data[i];
+				const raw = serie.data[i];
+				const value = +(raw && typeof raw === "object" ? raw.y : raw);
+				if (Number.isNaN(value)) continue;
+				output[props.chart_config.categories[i]] += value;
+				count += 1;
+				if (value > highest) highest = value;
 			}
 		});
 		sum = Object.values(output).reduce(
@@ -52,7 +57,27 @@ const heatmapData = computed(() => {
 
 	output.highest = highest;
 	output.sum = sum;
+	output.mean = count > 0 ? sum / count : 0;
 	return output;
+});
+
+const showSummary = computed(() => !props.chart_config.hide_summary);
+const summaryLabel = computed(
+	() => props.chart_config.summary_label ?? "總合"
+);
+const summaryValue = computed(() => {
+	if (props.chart_config.summary_text) {
+		return props.chart_config.summary_text;
+	}
+	const mode = props.chart_config.summary_aggregate ?? "sum";
+	const value = mode === "mean" ? heatmapData.value.mean : heatmapData.value.sum;
+	if (!Number.isFinite(value)) return "—";
+	const decimals = props.chart_config.summary_decimals ?? (mode === "mean" ? 1 : 0);
+	return value.toFixed(decimals);
+});
+const summaryUnit = computed(() => {
+	if (props.chart_config.summary_text) return "";
+	return props.chart_config.unit;
 });
 
 const colorScale = computed(() => {
@@ -87,9 +112,10 @@ const chartOptions = ref({
 		},
 	},
 	dataLabels: {
+		enabled: !props.chart_config.hide_data_labels,
 		distributed: true,
 		style: {
-			fontSize: "12px",
+			fontSize: props.chart_config.data_label_font_size ?? "12px",
 			fontWeight: "normal",
 		},
 	},
@@ -211,15 +237,18 @@ function handleDataSelection(_e, _chartContext, config) {
 <template>
   <div
     v-if="activeChart === 'HeatmapChart'"
-    class="heatmapchart"
+    :class="['heatmapchart', { 'heatmapchart-fit': chart_config?.fit }]"
   >
-    <div class="heatmapchart-title">
-      <h5>總合</h5>
-      <h6>{{ heatmapData.sum }} {{ chart_config.unit }}</h6>
+    <div
+      v-if="showSummary"
+      class="heatmapchart-title"
+    >
+      <h5>{{ summaryLabel }}</h5>
+      <h6>{{ summaryValue }} {{ summaryUnit }}</h6>
     </div>
     <VueApexCharts
       width="100%"
-      height="360px"
+      :height="chart_config?.fit ? '100%' : '360px'"
       type="heatmap"
       :options="chartOptions"
       :series="series"
@@ -229,6 +258,11 @@ function handleDataSelection(_e, _chartContext, config) {
 </template>
 
 <style scoped lang="scss">
+.heatmapchart-fit {
+	height: 100%;
+	overflow: hidden;
+}
+
 .heatmapchart {
 	&-title {
 		display: flex;

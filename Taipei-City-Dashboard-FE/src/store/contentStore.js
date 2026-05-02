@@ -16,6 +16,12 @@ import { useDialogStore } from "./dialogStore";
 import { useAuthStore } from "./authStore";
 import { getComponentDataTimeframe } from "../assets/utilityFunctions/dataTimeframe";
 import { CityManager } from "../dashboardComponent/utilities/cityManager";
+import {
+	YOUBIKE_SHORTAGE_DASHBOARDS,
+	isYoubikeShortageIndex,
+	getYoubikeShortageDashboard,
+	loadYoubikeShortageComponents,
+} from "./youbikeShortageBlocks";
 
 export const useContentStore = defineStore("content", {
 	state: () => ({
@@ -83,6 +89,41 @@ export const useContentStore = defineStore("content", {
 		},
 		setMapLayerData(index, component) {
 			this.mapLayers[index] = component;
+		},
+		// Inject local YouBike 缺車分析 dashboards into each city list (idempotent).
+		// 仿 production：臺北版掛 taipei 群組、雙北版掛 metrotaipei 群組。
+		injectYoubikeShortageDashboard() {
+			YOUBIKE_SHORTAGE_DASHBOARDS.forEach((d) => {
+				const list = this.dashboards.get(d.city) ?? [];
+				if (list.find((item) => item.index === d.index)) {
+					return;
+				}
+				list.unshift({ index: d.index, name: d.name, icon: d.icon });
+				this.dashboards.set(d.city, list);
+			});
+		},
+		// Load a YouBike 缺車分析 dashboard from local JSON (skip BE)
+		async loadYoubikeShortageDashboard(index) {
+			const dashboard = getYoubikeShortageDashboard(index);
+			if (!dashboard) {
+				this.error = true;
+				this.loading = false;
+				return;
+			}
+			this.currentDashboard.name = dashboard.name;
+			this.currentDashboard.icon = dashboard.icon;
+			try {
+				const components = await loadYoubikeShortageComponents(index);
+				this.cityDashboard.components = components;
+				this.filterCurrentDashboardContent();
+			} catch (error) {
+				console.error("Failed to load YouBike shortage dashboard:", error);
+				this.cityDashboard.components = [];
+				this.currentDashboard.components = [];
+				this.currentDashboardExcluded.components = [];
+				this.error = true;
+			}
+			this.loading = false;
 		},
 		/* Steps in adding content to the application (/dashboard or /mapview) */
 		// 1. Check the current path and execute actions based on the current path
@@ -158,6 +199,9 @@ export const useContentStore = defineStore("content", {
 				}
 			});
 
+			// Inject local YouBike 缺車分析 dashboard into 雙北 list
+			this.injectYoubikeShortageDashboard();
+
 			if (onlyDashboard) return;
 
 			// 2-1. If the current path is /dashboard or /mapview, redirect to the first dashboard
@@ -216,6 +260,12 @@ export const useContentStore = defineStore("content", {
 		},
 		// 3. Call an API to get all component info of the current index dashboard not filtered by city and store it
 		async setCurrentDashboardAllContent() {
+			// Local injected dashboard: skip BE and load from local JSON
+			if (isYoubikeShortageIndex(this.currentDashboard.index)) {
+				await this.loadYoubikeShortageDashboard(this.currentDashboard.index);
+				return;
+			}
+
 			const currentCityDashboards = this.currentDashboard.city
 				? this.getDashboardsByCity(this.currentDashboard.city)
 				: this.personalDashboards;
