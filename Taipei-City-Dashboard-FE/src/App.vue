@@ -17,7 +17,8 @@ import {
 	computed,
 	watch,
 } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { useControlBus } from "./composables/useControlBus";
 import { useAuthStore } from "./store/authStore";
 import { useDialogStore } from "./store/dialogStore";
 import { useContentStore } from "./store/contentStore";
@@ -41,6 +42,7 @@ const timeToUpdate = ref(600);
 
 const mapStore = useMapStore();
 const route = useRoute();
+const router = useRouter();
 const updateBoards =
 	import.meta.env.VITE_PERSONAL_BOARD_UPDATE?.split(",") || [];
 const boardIndex = ref(null);
@@ -55,6 +57,7 @@ let chartTimer = null;
 let crowdingTimer = null;
 let timeTimer = null;
 let mrtTimer = null;
+let unsubNavigate = null;
 // Update 狀態
 let isCrowdingUpdating = false;
 
@@ -208,12 +211,19 @@ onMounted(() => {
 	crowdingTimer = setInterval(reloadCrowdingChartData, 1000 * 60);
 	timeTimer = setInterval(updateTimeToUpdate, 1000 * 5);
 	mrtTimer = setInterval(reload3DMRTMapData, 1000 * 10);
+
+	unsubNavigate = useControlBus().on("navigate_to_dashboard", ({ index, city }) => {
+		const cur = router.currentRoute.value.query;
+		if (cur.index === index && cur.city === city) return;
+		router.push({ path: "/dashboard", query: { index, city } });
+	});
 });
 onBeforeUnmount(() => {
 	clearInterval(chartTimer);
 	clearInterval(crowdingTimer);
 	clearInterval(timeTimer);
 	clearInterval(mrtTimer);
+	unsubNavigate();
 	// contentStore.wsDisconnect();
 });
 </script>

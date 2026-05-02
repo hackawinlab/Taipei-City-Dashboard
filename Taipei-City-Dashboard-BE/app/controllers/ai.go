@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"TaipeiCityDashboardBE/app/services/ai"
+	"TaipeiCityDashboardBE/app/services/ai/control"
 	"TaipeiCityDashboardBE/app/util"
 	"context"
 	"fmt"
@@ -77,6 +78,10 @@ func ChatWithTWCC(c *gin.Context) {
 
 	// 3. Prepare Dynamic Options
 	options := input.ToCallOptions()
+	options = ai.WithUIControlTools(options)
+
+	var bag []control.Event
+	ctx := control.WithBag(c.Request.Context(), &bag)
 
 	// 4. Handle Streaming Response
 	if input.Stream {
@@ -86,7 +91,7 @@ func ChatWithTWCC(c *gin.Context) {
 		c.Header("Connection", "keep-alive")
 
 		// Add Streaming Callback
-		options = append(options, llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
+		options = append(options, llms.WithStreamingFunc(func(streamCtx context.Context, chunk []byte) error {
 			if string(chunk) == ": heartbeat\n\n" {
 				return nil
 			}
@@ -98,7 +103,7 @@ func ChatWithTWCC(c *gin.Context) {
 			return nil
 		}))
 
-		_, err := ai.ChatWithTWCC(c.Request.Context(), req, options...)
+		_, err := ai.ChatWithTWCC(ctx, req, options...)
 		if err != nil {
 			if !c.Writer.Written() {
 				c.JSON(http.StatusInternalServerError, gin.H{
@@ -112,7 +117,7 @@ func ChatWithTWCC(c *gin.Context) {
 	}
 
 	// 5. Standard Non-Streaming Response
-	logEntry, err := ai.ChatWithTWCC(c.Request.Context(), req, options...)
+	logEntry, err := ai.ChatWithTWCC(ctx, req, options...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
@@ -125,17 +130,18 @@ func ChatWithTWCC(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"session":     logEntry.SessionID,
-			"content":     logEntry.Answer,
+			"session":        logEntry.SessionID,
+			"content":        logEntry.Answer,
+			"control_events": bag,
 			"usage": gin.H{
 				"input_tokens":  logEntry.InputTokens,
 				"output_tokens": logEntry.OutputTokens,
 				"total_tokens":  logEntry.TotalTokens,
 			},
-			"tool_used":   logEntry.ToolUsed,
-			"latency_ms":  logEntry.LatencyMS,
-			"model":       logEntry.Model,
-			"provider":    logEntry.Provider,
+			"tool_used":  logEntry.ToolUsed,
+			"latency_ms": logEntry.LatencyMS,
+			"model":      logEntry.Model,
+			"provider":   logEntry.Provider,
 		},
 	})
 }
