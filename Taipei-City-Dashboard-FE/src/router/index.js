@@ -55,11 +55,6 @@ const routes = [
 		component: EmbedView,
 	},
 	{
-		path: "/youbike-shortage",
-		name: "youbike-shortage",
-		component: () => import("../views/YoubikeShortageView.vue"),
-	},
-	{
 		path: "/embed",
 		redirect: "/embed/0",
 	},
@@ -126,7 +121,7 @@ router.beforeEach((to) => {
 	const authStore = useAuthStore();
 	if (authStore.isMobileDevice && authStore.isNarrowDevice) {
 		if (
-			!["dashboard", "component-info", "callback", "embed", "mapview", "youbike-shortage"].includes(
+			!["dashboard", "component-info", "callback", "embed", "mapview"].includes(
 				to.name
 			)
 		) {
