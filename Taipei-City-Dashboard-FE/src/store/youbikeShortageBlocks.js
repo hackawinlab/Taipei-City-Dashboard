@@ -1,12 +1,16 @@
 /**
- * 從本地 JSON 載入 YouBike 缺車分析 dashboard 的 4 個 component config，
- * 包成符合 contentStore 既有資料結構（BE response.data.data）的 component 物件，
- * 讓 /dashboard 與 cityDashboard 流程不必走 BE API。
+ * 透過 /commute/youbike/shortage-analysis API 載入 YouBike 缺車分析 dashboard
+ * 的 4 個 component config，包成符合 contentStore 既有資料結構
+ * （BE response.data.data）的 component 物件。
+ *
+ * Pipeline：CSV → scripts/load-ubike-data.sh → hackathon.youbike_snapshots → BE 聚合 → 此 store。
  *
  * 仿 production 命名：兩個 dashboard 各掛 SideBar 一個分區
  *   - youbike-shortage-analysis-taipei      → 「臺北儀表板」（只看臺北）
  *   - youbike-shortage-analysis-metrotaipei → 「雙北儀表板」（雙北合計）
  */
+
+import http from "../router/axios";
 
 const DASHBOARD_ICON = "directions_bike";
 const SOURCE = "YouBike 開放資料";
@@ -73,11 +77,10 @@ let cachedDataset = null;
 
 async function loadDataset() {
 	if (cachedDataset) return cachedDataset;
-	const res = await fetch("/data/youbike_hourly_shortage.json", {
-		cache: "no-store",
-	});
-	if (!res.ok) throw new Error(`HTTP ${res.status}`);
-	cachedDataset = await res.json();
+	// `http` (Axios instance with /api baseURL) handles dev proxy + auth header.
+	// Backend response shape is { ...payload }; controller does not wrap in `data`.
+	const res = await http.get("/commute/youbike/shortage-analysis");
+	cachedDataset = res.data;
 	return cachedDataset;
 }
 

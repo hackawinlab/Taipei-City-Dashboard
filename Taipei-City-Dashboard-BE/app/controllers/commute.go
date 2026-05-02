@@ -2,14 +2,17 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"TaipeiCityDashboardBE/app/models"
+	"TaipeiCityDashboardBE/app/youbike_aggregate"
 
 	"github.com/gin-gonic/gin"
 )
@@ -450,4 +453,65 @@ LIMIT $2`
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": data})
+}
+
+// Shortage analysis dashboard payload — built from the same youbike_snapshots
+// table that powers the timemap, then cached in-process for shortageCacheTTL
+// because the aggregation reads ~130k rows and is identical for every caller.
+
+const shortageCacheTTL = 60 * time.Second
+
+var (
+	shortageCacheMu      sync.Mutex
+	shortageCachedAt     time.Time
+	shortageCachedResult youbike_aggregate.Payload
+)
+
+// GetYouBikeShortageAnalysis handles GET /api/v1/commute/youbike/shortage-analysis.
+//
+// Computes the four blocks the YouBike shortage dashboard reads (timeline_low,
+// bar_persistence, heatmap, imbalance) directly from the hackathon snapshots
+// so the pipeline stays consistent with the timemap (CSV → load script → PG →
+// API), instead of relying on a separately maintained static JSON.
+func GetYouBikeShortageAnalysis(c *gin.Context) {
+	if models.DBHackathon == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
+		return
+	}
+
+	shortageCacheMu.Lock()
+	if !shortageCachedAt.IsZero() && time.Since(shortageCachedAt) < shortageCacheTTL {
+		cached := shortageCachedResult
+		shortageCacheMu.Unlock()
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+	shortageCacheMu.Unlock()
+
+	sqlDB, err := models.DBHackathon.DB()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("db error: %v", err)})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+	snapshots, err := youbike_aggregate.LoadFromDB(ctx, sqlDB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("load error: %v", err)})
+		return
+	}
+	if len(snapshots) == 0 {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "youbike_snapshots is empty — run scripts/load-ubike-data.sh first"})
+		return
+	}
+
+	payload := youbike_aggregate.BuildPayload(snapshots)
+
+	shortageCacheMu.Lock()
+	shortageCachedAt = time.Now()
+	shortageCachedResult = payload
+	shortageCacheMu.Unlock()
+
+	c.JSON(http.StatusOK, payload)
 }
