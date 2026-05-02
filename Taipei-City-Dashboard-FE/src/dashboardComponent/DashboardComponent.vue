@@ -242,6 +242,7 @@ function returnChartComponent(name, svg) {
         half: mode === 'half',
         large: mode === 'large',
         preview: mode === 'preview',
+        compact: activeChart === 'YouBikeTimeMap',
       },
     ]"
     :style="style"
@@ -856,6 +857,16 @@ button:hover {
 .mapclosed {
 	max-height: none;
 	height: fit-content;
+}
+
+.compact {
+	height: fit-content !important;
+	max-height: none !important;
+
+	.dashboardcomponent-chart {
+		height: auto;
+		overflow-y: visible;
+	}
 }
 
 .mapopen {

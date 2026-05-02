@@ -18,11 +18,9 @@ const mapStore = useMapStore();
 const SLOTS_PER_HOUR = 4;
 const TOTAL_SLOTS = 24 * SLOTS_PER_HOUR; // 96
 
-const now = new Date();
-const currentSlot = ref(
-	now.getHours() * SLOTS_PER_HOUR + Math.floor(now.getMinutes() / 15),
-);
+const currentSlot = ref(0);
 const playing = ref(false);
+const cityFilter = ref("all"); // "all" = 雙北, "Taipei" = 台北市
 const cache = reactive({});
 
 let playInterval = null;
@@ -41,19 +39,24 @@ const currentLabel = computed(() => {
 	return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 });
 
+function cacheKey(slot) {
+	return `${cityFilter.value}:${slot}`;
+}
+
 async function fetchSlot(slot) {
 	if (!layerId.value) return;
-	if (cache[slot]) {
-		mapStore.updateTimeMapSource(layerId.value, cache[slot]);
+	const key = cacheKey(slot);
+	if (cache[key]) {
+		mapStore.updateTimeMapSource(layerId.value, cache[key]);
 		return;
 	}
 	const hour = Math.floor(slot / SLOTS_PER_HOUR);
 	const quarter = slot % SLOTS_PER_HOUR;
 	try {
 		const res = await http.get(
-			`/commute/youbike/map?city=all&hour=${hour}&quarter=${quarter}`,
+			`/commute/youbike/map?city=${cityFilter.value}&hour=${hour}&quarter=${quarter}`,
 		);
-		cache[slot] = res.data;
+		cache[key] = res.data;
 		mapStore.updateTimeMapSource(layerId.value, res.data);
 	} catch (e) {
 		console.warn("YouBikeTimeMap fetchSlot failed", e);
@@ -88,6 +91,17 @@ watch(currentSlot, (s) => {
 	debounceTimer = setTimeout(() => fetchSlot(s), 150);
 });
 
+watch(cityFilter, () => {
+	clearTimeout(debounceTimer);
+	debounceTimer = setTimeout(() => fetchSlot(currentSlot.value), 100);
+});
+
+function setCity(value) {
+	if (cityFilter.value === value) return;
+	if (playing.value) togglePlay();
+	cityFilter.value = value;
+}
+
 function pauseIfPlaying() {
 	if (playing.value) togglePlay();
 }
@@ -107,6 +121,20 @@ onUnmounted(() => {
     <!-- Header: time label + play button -->
     <div class="youbike-timemap-header">
       <span class="hour-label">{{ currentLabel }}</span>
+      <div class="youbike-timemap-city">
+        <button
+          :class="{ active: cityFilter === 'Taipei' }"
+          @click="setCity('Taipei')"
+        >
+          台北市
+        </button>
+        <button
+          :class="{ active: cityFilter === 'all' }"
+          @click="setCity('all')"
+        >
+          雙北
+        </button>
+      </div>
       <button
         class="play-btn"
         @click="togglePlay"
@@ -127,12 +155,6 @@ onUnmounted(() => {
         @touchstart="pauseIfPlaying"
       >
       <span>23:45</span>
-    </div>
-    <!-- Legend -->
-    <div class="youbike-timemap-legend">
-      <span class="dot red" /><span>缺車 (&lt;10%)</span>
-      <span class="dot orange" /><span>普通 (10–30%)</span>
-      <span class="dot green" /><span>充足 (≥30%)</span>
     </div>
   </div>
 </template>
@@ -166,6 +188,30 @@ onUnmounted(() => {
         }
     }
 
+    &-city {
+        display: flex;
+        column-gap: 4px;
+
+        button {
+            padding: 2px 10px;
+            border: 1px solid var(--color-border);
+            border-radius: 999px;
+            background: transparent;
+            color: var(--color-complement-text);
+            font-size: var(--font-s);
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+
+            &:hover { color: var(--color-normal-text); }
+
+            &.active {
+                background: var(--color-highlight);
+                border-color: var(--color-highlight);
+                color: var(--color-normal-text);
+            }
+        }
+    }
+
     &-slider {
         display: flex;
         align-items: center;
@@ -177,26 +223,6 @@ onUnmounted(() => {
             cursor: pointer;
         }
         span { font-size: var(--font-s); color: var(--color-complement-text); }
-    }
-
-    &-legend {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        column-gap: var(--font-ms);
-        row-gap: 4px;
-        font-size: var(--font-s);
-        color: var(--color-complement-text);
-
-        .dot {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            &.red    { background: #ef4444; }
-            &.orange { background: #f97316; }
-            &.green  { background: #22c55e; }
-        }
     }
 }
 </style>

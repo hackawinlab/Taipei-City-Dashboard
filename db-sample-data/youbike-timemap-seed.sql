@@ -14,11 +14,12 @@ INSERT INTO components (index, name)
 VALUES ('youbike_timemap', 'YouBike 一日可用率動態地圖')
 ON CONFLICT (index) DO NOTHING;
 
--- 4. Map config (api source)
-INSERT INTO component_maps (index, title, type, source, api_endpoint, paint)
-SELECT 'youbike_timemap', 'YouBike站點時段可用率', 'circle', 'api',
+-- 4. Map config (api source, symbol layer using bike sprites by availability_pct)
+INSERT INTO component_maps (index, title, type, source, icon, api_endpoint, paint)
+SELECT 'youbike_timemap', 'YouBike站點時段可用率', 'symbol', 'api',
+       'youbike-availability',
        '/api/commute/youbike/map',
-       '{"circle-color":["step",["get","availability_pct"],"#ef4444",10,"#f97316",30,"#22c55e"],"circle-radius":["interpolate",["linear"],["get","total_docks"],10,4,50,9],"circle-opacity":0.85,"circle-stroke-width":1,"circle-stroke-color":"#1a1a1a"}'
+       '{}'
 WHERE NOT EXISTS (SELECT 1 FROM component_maps WHERE index = 'youbike_timemap');
 
 -- 5. Query charts (taipei and metrotaipei)
@@ -32,7 +33,7 @@ SELECT
   '透過時間滑桿顯示YouBike各站點在一日24小時中的可用率變化，顏色以紅橙綠三色表示缺車、普通、充足三個狀態。',
   '用於分析YouBike各站點在不同時段的可用率分布，有助於了解城市共享單車使用模式，優化站點規劃與調度策略。',
   '{}', '{doit}', NOW(), NOW(), 'map_legend',
-  'SELECT ''YouBike'' AS name, ''circle'' AS type', city_val.city
+  'SELECT ''YouBike'' AS name, ''symbol'' AS type', city_val.city
 FROM component_maps cm
 CROSS JOIN (VALUES ('taipei'), ('metrotaipei')) AS city_val(city)
 WHERE cm.index = 'youbike_timemap'
