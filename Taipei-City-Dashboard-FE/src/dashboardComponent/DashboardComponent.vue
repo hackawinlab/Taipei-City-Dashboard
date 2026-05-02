@@ -1,11 +1,12 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 // import "./styles/chartStyles.css";
 // import "./styles/toggleswitch.css";
 import "material-icons/iconfont/material-icons.css";
 import { getComponentDataTimeframe } from "./utilities/dataTimeframe";
 import { timeTerms } from "./utilities/AllTimes";
 import { chartTypes } from "./utilities/chartTypes";
+import http from "../router/axios";
 
 import ComponentTag from "./components/ComponentTag.vue";
 import TagTooltip from "./components/TagTooltip.vue";
@@ -112,6 +113,110 @@ const toggleOn = computed({
 
 const mousePosition = ref({ x: null, y: null });
 const showTagTooltip = ref(false);
+
+// --- Component AI Action (currently only for YouBikeTimeMap) ---
+const showAI = computed(
+	() =>
+		activeChart.value === "YouBikeTimeMap" && props.mode !== "preview"
+);
+const aiPanelOpen = ref(false);
+const aiPrompt = ref("幫我看公館晚高峰");
+const aiLoading = ref(false);
+const aiError = ref("");
+const aiResult = ref(null);
+const chartRef = ref(null);
+const suggestedPrompts = [
+	"公館晚高峰",
+	"台北車站早高峰",
+	"市政府晚上8點",
+];
+const aiAnchor = ref({ top: 80, left: 24 });
+const aiPanelStyle = computed(() => {
+	if (!props.mode.includes("map")) return null;
+	return {
+		top: `${aiAnchor.value.top}px`,
+		left: `${aiAnchor.value.left}px`,
+		right: "auto",
+	};
+});
+
+function setChartRef(el, item) {
+	if (item === activeChart.value) chartRef.value = el;
+}
+
+function followupLabel(fu) {
+	if (typeof fu === "string") return fu;
+	return fu?.label || fu?.quick_action || "";
+}
+
+function followupAction(fu) {
+	if (typeof fu === "string") return fu;
+	return fu?.quick_action || fu?.label || "";
+}
+
+function areaInsightOf(result) {
+	const list = result?.insights || [];
+	return list.find((i) => i?.kind === "area_availability") || null;
+}
+
+function onAIClick(event) {
+	if (props.mode.includes("map") && !toggleOn.value) {
+		toggleOn.value = true;
+	}
+	if (props.mode.includes("map") && event?.currentTarget) {
+		const rect = event.currentTarget.getBoundingClientRect();
+		const PANEL_WIDTH = 300;
+		const GAP = 8;
+		const margin = 16;
+		// Pop the panel out to the RIGHT of the button (into the map
+		// area) and align its top with the button's top — this keeps
+		// the card's time slider, 組件資訊 link, and other controls
+		// uncovered. Fall back to "left of button" if the right side
+		// would clip; clamp top so it fits in the viewport.
+		let left = rect.right + GAP;
+		if (left + PANEL_WIDTH > window.innerWidth - margin) {
+			left = Math.max(margin, rect.left - PANEL_WIDTH - GAP);
+		}
+		const top = Math.max(
+			margin,
+			Math.min(rect.top, window.innerHeight - 200)
+		);
+		aiAnchor.value = { top, left };
+	}
+	aiPanelOpen.value = !aiPanelOpen.value;
+}
+
+async function submitAIAction(prompt = aiPrompt.value) {
+	const message = String(prompt || "").trim();
+	if (!message || aiLoading.value) return;
+	aiPrompt.value = message;
+	aiLoading.value = true;
+	aiError.value = "";
+	try {
+		if (props.mode.includes("map") && !toggleOn.value) {
+			toggleOn.value = true;
+		}
+		await nextTick();
+		const componentState =
+			chartRef.value?.getComponentState?.() ?? {};
+		const res = await http.post("/ai/component-action", {
+			component_id: "youbike_timemap",
+			user_message: message,
+			component_state: componentState,
+		});
+		aiResult.value = res.data;
+		await nextTick();
+		(res.data.ui_events || []).forEach((ev) =>
+			chartRef.value?.applyAIEvent?.(ev)
+		);
+	} catch (e) {
+		aiError.value =
+			e?.response?.data?.message ||
+			"AI 操作暫時無法執行，請稍後再試。";
+	} finally {
+		aiLoading.value = false;
+	}
+}
 
 // Parses time data into display format
 const dataTime = computed(() => {
@@ -303,6 +408,15 @@ function returnChartComponent(name, svg) {
         class="dashboardcomponent-header-button"
       >
         <button
+          v-if="showAI"
+          class="ai-btn"
+          :class="{ active: aiPanelOpen }"
+          title="AI 操作這張圖"
+          @click="onAIClick"
+        >
+          <span>auto_awesome</span>
+        </button>
+        <button
           v-if="addBtn"
           @click="$emit('add', config.id, config.name)"
         >
@@ -329,6 +443,15 @@ function returnChartComponent(name, svg) {
         v-else-if="mode.includes('map')"
         class="dashboardcomponent-header-toggle"
       >
+        <button
+          v-if="showAI"
+          class="ai-btn ai-btn-map"
+          :class="{ active: aiPanelOpen }"
+          title="AI 操作這張圖"
+          @click="onAIClick"
+        >
+          <span>auto_awesome</span>
+        </button>
         <label class="toggleswitch">
           <input
             v-model="toggleOn"
@@ -339,6 +462,95 @@ function returnChartComponent(name, svg) {
         </label>
       </div>
     </div>
+    <!-- Component AI Action panel (teleport to body in map mode to escape overflow:hidden) -->
+    <Teleport
+      to="body"
+      :disabled="!mode.includes('map')"
+    >
+      <div
+        v-if="showAI && aiPanelOpen"
+        class="dashboardcomponent-ai-panel"
+        :class="{ 'ai-panel-floating': mode.includes('map') }"
+        :style="aiPanelStyle"
+      >
+        <div class="dashboardcomponent-ai-panel-title">
+          <span>AI 操作這張地圖</span>
+          <button @click="aiPanelOpen = false">
+            <span>close</span>
+          </button>
+        </div>
+        <div class="dashboardcomponent-ai-suggestions">
+          <button
+            v-for="prompt in suggestedPrompts"
+            :key="prompt"
+            :disabled="aiLoading"
+            @click="submitAIAction(prompt)"
+          >
+            {{ prompt }}
+          </button>
+        </div>
+        <form
+          class="dashboardcomponent-ai-input"
+          @submit.prevent="submitAIAction()"
+        >
+          <input
+            v-model="aiPrompt"
+            :disabled="aiLoading"
+            placeholder="例如：幫我看公館晚高峰"
+          >
+          <button
+            type="submit"
+            :disabled="aiLoading"
+          >
+            <span>{{ aiLoading ? "hourglass_top" : "send" }}</span>
+          </button>
+        </form>
+        <p
+          v-if="aiError"
+          class="dashboardcomponent-ai-error"
+        >
+          {{ aiError }}
+        </p>
+        <div
+          v-if="aiResult"
+          class="dashboardcomponent-ai-result"
+          :class="{ 'is-clarify': aiResult.mode === 'clarify' }"
+        >
+          <p>{{ aiResult.summary }}</p>
+          <ul v-if="aiResult.ui_events?.length">
+            <li
+              v-for="(event, idx) in aiResult.ui_events"
+              :key="`${event.action}-${idx}`"
+            >
+              {{ event.action === "set_time_slot"
+                ? `切到 ${event.payload.label}`
+                : `移到 ${event.payload.place}` }}
+            </li>
+          </ul>
+          <div
+            v-if="areaInsightOf(aiResult)"
+            class="dashboardcomponent-ai-insight"
+            :class="`verdict-${areaInsightOf(aiResult).verdict}`"
+          >
+            <span class="verdict-dot" />
+            <span>{{ areaInsightOf(aiResult).phrasing }}</span>
+          </div>
+          <div
+            v-if="aiResult.followups?.length"
+            class="dashboardcomponent-ai-followups"
+          >
+            <button
+              v-for="(fu, i) in aiResult.followups"
+              :key="`fu-${i}`"
+              :disabled="aiLoading"
+              @click="submitAIAction(followupAction(fu))"
+            >
+              {{ followupLabel(fu) }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
     <!-- Control Buttons -->
     <div
       v-if="
@@ -425,6 +637,7 @@ function returnChartComponent(name, svg) {
       <component
         :is="returnChartComponent(item)"
         v-for="item in config.chart_config.types"
+        :ref="(el) => setChartRef(el, item)"
         :key="`${props.config.index}-${item}-chart-${item.city}`"
         :active-chart="activeChart"
         :active-city="activeCity"
@@ -671,6 +884,38 @@ button:hover {
 			min-height: var(--font-ms);
 			min-width: 2rem;
 			margin-top: 4px;
+			display: flex;
+			align-items: center;
+			column-gap: 6px;
+		}
+
+		.ai-btn {
+			display: flex;
+			align-items: center;
+			padding: 2px 6px;
+			border: 1px solid var(--color-border);
+			border-radius: 999px;
+			background: transparent;
+			color: var(--color-complement-text);
+			cursor: pointer;
+			transition: background 0.2s, color 0.2s, border-color 0.2s;
+
+			span {
+				color: var(--color-complement-text);
+				font-family: var(--font-icon);
+				font-size: 1rem;
+				transition: color 0.2s;
+			}
+
+			&:hover,
+			&.active {
+				background: var(--color-highlight);
+				border-color: var(--color-highlight);
+
+				span {
+					color: white;
+				}
+			}
 		}
 
 		@media (max-width: 760px) {
@@ -754,6 +999,183 @@ button:hover {
 
 		p {
 			color: var(--color-border);
+		}
+	}
+
+	&-ai-panel {
+		position: absolute;
+		top: 2.6rem;
+		left: var(--font-m);
+		right: var(--font-m);
+		z-index: 20;
+		display: flex;
+		flex-direction: column;
+		row-gap: 8px;
+		padding: 10px;
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+		background: var(--color-component-background);
+		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+		max-height: calc(100% - 3rem);
+		overflow-y: auto;
+
+		// In MapView (mode=map / halfmap) the card lives inside containers
+		// that clip with overflow: hidden. The panel is teleported to
+		// <body> and floats fixed beside the AI button (positioned via
+		// inline style from aiPanelStyle).
+		&.ai-panel-floating {
+			position: fixed;
+			width: 300px;
+			max-width: calc(100vw - 32px);
+			max-height: calc(100vh - 120px);
+			padding: 8px;
+			box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+		}
+
+		&-title {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			color: var(--color-normal-text);
+			font-size: var(--font-s);
+			font-weight: 700;
+
+			button {
+				background: none;
+				border: none;
+				cursor: pointer;
+				color: var(--color-complement-text);
+
+				span {
+					font-family: var(--font-icon);
+					font-size: 1rem;
+				}
+			}
+		}
+	}
+
+	&-ai-suggestions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+
+		button {
+			padding: 3px 8px;
+			border: 1px solid var(--color-border);
+			border-radius: 999px;
+			background: transparent;
+			color: var(--color-complement-text);
+			font-size: var(--font-s);
+			cursor: pointer;
+
+			&:hover:not(:disabled) {
+				color: var(--color-normal-text);
+				border-color: var(--color-highlight);
+			}
+		}
+	}
+
+	&-ai-input {
+		display: flex;
+		column-gap: 6px;
+
+		input {
+			min-width: 0;
+			flex: 1;
+			padding: 6px 8px;
+			border: 1px solid var(--color-border);
+			border-radius: 6px;
+			background: transparent;
+			color: var(--color-normal-text);
+			font-size: var(--font-s);
+		}
+
+		button {
+			width: 32px;
+			height: 32px;
+			flex: 0 0 32px;
+			border: none;
+			border-radius: 50%;
+			background: var(--color-highlight);
+			color: white;
+			cursor: pointer;
+
+			span {
+				font-family: var(--font-icon);
+				font-size: 1rem;
+			}
+		}
+	}
+
+	&-ai-error {
+		margin: 0;
+		color: #ff8a8a;
+		font-size: var(--font-s);
+	}
+
+	&-ai-result {
+		color: var(--color-complement-text);
+		font-size: var(--font-s);
+
+		p {
+			margin: 0;
+			color: var(--color-normal-text);
+		}
+
+		ul {
+			margin: 6px 0 0;
+			padding-left: 18px;
+		}
+
+		&.is-clarify p {
+			color: #ffd479;
+		}
+	}
+
+	&-ai-insight {
+		display: flex;
+		align-items: flex-start;
+		column-gap: 6px;
+		margin-top: 6px;
+		padding: 6px 8px;
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.04);
+		font-size: var(--font-s);
+		color: var(--color-normal-text);
+
+		.verdict-dot {
+			margin-top: 6px;
+			width: 8px;
+			height: 8px;
+			flex: 0 0 8px;
+			border-radius: 50%;
+			background: var(--color-complement-text);
+		}
+
+		&.verdict-easy .verdict-dot { background: #6bd47a; }
+		&.verdict-balanced .verdict-dot { background: #f0c14b; }
+		&.verdict-tight .verdict-dot { background: #ff6b6b; }
+	}
+
+	&-ai-followups {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: 6px;
+
+		button {
+			padding: 3px 8px;
+			border: 1px solid var(--color-border);
+			border-radius: 999px;
+			background: transparent;
+			color: var(--color-complement-text);
+			font-size: var(--font-s);
+			cursor: pointer;
+
+			&:hover:not(:disabled) {
+				color: var(--color-normal-text);
+				border-color: var(--color-highlight);
+			}
 		}
 	}
 
