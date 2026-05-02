@@ -5,9 +5,11 @@ services:
     restart: always
     container_name: redis
     image: redis:7.2.3-alpine
+    ports:
+      - "6379:6379"
     volumes:
       - redis-data:/data
-      
+
   postgres-data:
     image: postgis/postgis:16-3.4-alpine
     container_name: postgres-data
@@ -16,6 +18,8 @@ services:
       POSTGRES_DB: ${DB_DASHBOARD_DBNAME}
       POSTGRES_USER: ${DB_DASHBOARD_USER}
       POSTGRES_PASSWORD: ${DB_DASHBOARD_PASSWORD}
+    ports:
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 

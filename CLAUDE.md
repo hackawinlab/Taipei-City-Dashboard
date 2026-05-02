@@ -44,35 +44,27 @@ Verify all three containers have port bindings (`sudo docker ps`). If `redis` sh
 sudo docker network connect br_dashboard redis
 ```
 
-### Initialize databases (first time only)
+### Initialize / refresh the YouBike data layer (one command)
+
+Real CSV snapshots live on `winlab@192.168.10.71:~/hackathon-pipeline/data/`. Pull them into `data/`, then run the bootstrap script:
 
 ```bash
-# Create the hackathon DB
-sudo docker exec postgres-manager psql -U postgres -c "CREATE DATABASE hackathon;"
-
-# Seed dashboardmanager: component + map config for YouBike time map
-sudo docker exec -i postgres-manager psql -U postgres -d dashboardmanager \
-  < db-sample-data/youbike-timemap-seed.sql
-
-# Seed hackathon DB: 23 stations × 24h mock data
-sudo docker exec -i postgres-manager psql -U postgres -d hackathon \
-  < db-sample-data/youbike-hackathon-mock.sql
-```
-
-### Load real YouBike snapshots (optional)
-
-Real CSV snapshots live on `winlab@192.168.10.71:~/hackathon-pipeline/data/`. Pull them into `data/` and load:
-
-```bash
-# 1. Pull from the pipeline host (skip if already in data/)
 rsync -ah winlab@192.168.10.71:hackathon-pipeline/data/youbike_Taipei    data/
 rsync -ah winlab@192.168.10.71:hackathon-pipeline/data/youbike_NewTaipei data/
-
-# 2. Load into hackathon.youbike_snapshots (idempotent — safe to re-run)
-./scripts/load-youbike-csv.sh
+./scripts/load-ubike-data.sh
 ```
 
-`scripts/load-youbike-csv.sh` adds a unique index on `(station_uid, snapshot_at)` and uses `INSERT … ON CONFLICT DO NOTHING`, so re-running the script (or re-pulling new CSVs) only inserts rows that aren't there yet. Override `PG_CONTAINER` / `PG_USER` / `PG_DB` / `DATA_DIR` / `DOCKER` via env if your setup differs.
+`scripts/load-ubike-data.sh` is idempotent and does the following:
+
+1. Creates the `hackathon` database (if missing).
+2. Seeds `dashboardmanager` with the timemap component and the "Youbike Analysis" dashboard.
+3. Initializes the `youbike_snapshots` schema and indexes.
+4. Loads every CSV under `data/youbike_{Taipei,NewTaipei}/`.
+5. Fills missing 15-min slots so every slider tick has data.
+
+CSV files are not committed. The script aborts with instructions if `data/` is empty — for a quick demo you can drop a handful of CSVs into the two subdirs and the gap-fill step will project them across all 96 quarter-hour slots.
+
+Useful env overrides: `PG_CONTAINER`, `PG_USER`, `HACKATHON_DB`, `MANAGER_DB`, `DATA_DIR`, `DOCKER`.
 
 ### Start the backend
 
@@ -152,6 +144,8 @@ go run main.go migrateDB        # Run manager DB migrations
 go run main.go initDashboard    # Seed dashboard sample data
 go build -v ./...               # Build check (used in CI)
 ```
+
+`migrateDB` needs `DASHBOARD_DEFAULT_USERNAME`, `DASHBOARD_DEFAULT_Email`, and `DASHBOARD_DEFAULT_PASSWORD` set in addition to the DB env vars — without them the admin-user step silently no-ops (FK errors with `auth_user_id=0`) and `auth_users` ends up empty. Defaults from `docker/.env`: `admin` / `admin@example.com` / `Admin123!`.
 
 No dedicated test suite; CI runs `go build`.
 
@@ -260,8 +254,10 @@ A time-series map component showing YouBike station availability across 24 hours
 | `Taipei-City-Dashboard-FE/src/dashboardComponent/DashboardComponent.vue` | Registered `YouBikeTimeMap` chart type |
 | `Taipei-City-Dashboard-FE/src/dashboardComponent/utilities/chartTypes.ts` | Added `YouBikeTimeMap: "時間軸地圖"` |
 | `Taipei-City-Dashboard-FE/vite.config.js` | Added `LOCAL_BACKEND=true` mode (port 3000, proxy to localhost:8080) |
-| `db-sample-data/youbike-hackathon-mock.sql` | Mock data: 23 stations × 24h, rush-hour shortage patterns |
+| `scripts/load-ubike-data.sh` | One-shot bootstrap — creates DB, seeds dashboardmanager, loads CSVs from `data/`, gap-fills 15-min slots |
+| `scripts/fill-missing-youbike-slots.sql` | Per (city × hour × quarter) gap-fill — copies a random same-city snapshot into each empty slot |
 | `db-sample-data/youbike-timemap-seed.sql` | Idempotent seed for dashboardmanager: component, component_charts, component_maps (with api_endpoint), query_charts |
+| `db-sample-data/youbike-analysis-dashboard.sql` | Idempotent seed: per-city "Youbike Analysis" dashboard tab |
 
 **API endpoints:**
 
