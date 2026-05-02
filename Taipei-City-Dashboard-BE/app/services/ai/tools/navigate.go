@@ -53,6 +53,9 @@ func NavigateToDashboard(ctx context.Context, args string) (string, error) {
 	if p.City == "" {
 		p.City = "taipei"
 	}
+	if control.HasEventOfAction(ctx, NavigateToDashboardName) {
+		return "Already navigated once this turn. Do not call navigate_to_dashboard again.", nil
+	}
 	ok, err := models.IsValidDashboardForCity(p.Index, p.City)
 	if err != nil {
 		return fmt.Sprintf("Error: could not verify dashboard '%s' for city '%s': %v", p.Index, p.City, err), nil

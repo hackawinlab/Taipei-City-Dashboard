@@ -138,7 +138,29 @@ export const useChatStore = defineStore('chat', () => {
 			});
 			const data = res.data?.data ?? {};
 			chatData.value[placeholderIdx].content = data.content || "";
-			(data.control_events ?? []).forEach((e) => useControlBus().emit(e.action, e.payload));
+			const seen = new Set();
+			const navEvents = [];
+			const otherEvents = [];
+			for (const e of (data.control_events ?? [])) {
+				if (e.action === "navigate_to_dashboard") {
+					const key = `${e.payload?.index}:${e.payload?.city}`;
+					if (!seen.has(key)) {
+						seen.add(key);
+						navEvents.push(e);
+					}
+				} else {
+					otherEvents.push(e);
+				}
+			}
+			if (navEvents.length > 0) {
+				chatData.value[placeholderIdx].button = navEvents.map((e, i) => ({
+					id: i + 1,
+					text: "切換到此儀表板",
+					action: e.action,
+					payload: e.payload,
+				}));
+			}
+			otherEvents.forEach((e) => useControlBus().emit(e.action, e.payload));
 			saveChatLog(text, chatData.value[placeholderIdx].content);
 		} catch (err) {
 			chatData.value[placeholderIdx].content = `(發生錯誤：${err?.response?.data?.message || err.message})`;

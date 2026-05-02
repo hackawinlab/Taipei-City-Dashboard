@@ -22,3 +22,32 @@ func Append(ctx context.Context, e Event) {
 		*bag = append(*bag, e)
 	}
 }
+
+func getBag(ctx context.Context) *[]Event {
+	bag, ok := ctx.Value(ctxKey{}).(*[]Event)
+	if !ok || bag == nil {
+		return nil
+	}
+	return bag
+}
+
+// HasEvents reports whether any events have been appended to the bag in ctx.
+func HasEvents(ctx context.Context) bool {
+	bag := getBag(ctx)
+	return bag != nil && len(*bag) > 0
+}
+
+// HasEventOfAction reports whether an event with the given action has already
+// been appended. Tools use this to prevent duplicate events in one turn.
+func HasEventOfAction(ctx context.Context, action string) bool {
+	bag := getBag(ctx)
+	if bag == nil {
+		return false
+	}
+	for _, e := range *bag {
+		if e.Action == action {
+			return true
+		}
+	}
+	return false
+}

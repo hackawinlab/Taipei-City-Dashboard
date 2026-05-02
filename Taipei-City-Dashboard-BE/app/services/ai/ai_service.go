@@ -2,6 +2,7 @@ package ai
 
 import (
 	"TaipeiCityDashboardBE/app/models"
+	"TaipeiCityDashboardBE/app/services/ai/control"
 	"TaipeiCityDashboardBE/app/services/ai/providers/twcc"
 	"TaipeiCityDashboardBE/app/services/ai/tools"
 	"TaipeiCityDashboardBE/global"
@@ -96,6 +97,11 @@ func (s *aiSession) run(ctx context.Context) (*models.AIChatLog, error) {
 		s.toolUsed = true
 		logs.FInfo("Loop %d: Processing %d tool calls", i, len(toolCalls))
 		if err := s.executeTools(ctx, toolCalls); err != nil {
+			break
+		}
+		// UI control events are fire-and-done; stop looping so the LLM
+		// cannot call the same tool again in subsequent iterations.
+		if control.HasEvents(ctx) {
 			break
 		}
 	}
@@ -203,7 +209,7 @@ func (s *aiSession) injectInstructions() {
 		if t.Function != nil && t.Function.Name == tools.NavigateToDashboardName {
 			catalogue := DashboardCatalogueMarkdown()
 			if catalogue != "" {
-				instruction += "\n\nYou can navigate the user's UI by calling navigate_to_dashboard.\nRules:\n- Call navigate_to_dashboard AT MOST ONCE per user message.\n- After the tool call succeeds, ALWAYS reply in Traditional Chinese with one sentence confirming which dashboard was opened.\n- Do NOT call navigate_to_dashboard again after you have already called it in this turn.\n- Do NOT invent indices; use only indices from the catalogue below.\nCity rule: 台北 / 北市 / 台北市 → \"taipei\"; 雙北 / 新北 / 新北市 → \"metrotaipei\". If unclear, default \"taipei\".\n\nAvailable dashboards:\n" + catalogue
+				instruction += "\n\nYou can suggest the user to navigate to a dashboard by calling navigate_to_dashboard.\nRules:\n- Call navigate_to_dashboard AT MOST ONCE per user message.\n- After the tool call succeeds, ALWAYS reply in Traditional Chinese with one sentence suggesting which dashboard to check, e.g. \"建議您查看「XXX」儀表板，可點擊下方按鈕切換。\" (A button will appear below the message for the user to click.)\n- Do NOT call navigate_to_dashboard again after you have already called it in this turn.\n- Do NOT invent indices; use only indices from the catalogue below.\nCity rule: 台北 / 北市 / 台北市 → \"taipei\"; 雙北 / 新北 / 新北市 → \"metrotaipei\". If unclear, default \"taipei\".\n\nAvailable dashboards:\n" + catalogue
 			}
 			break
 		}

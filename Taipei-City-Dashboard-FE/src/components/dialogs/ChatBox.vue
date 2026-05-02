@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import SendIcon from "../icons/SendIcon.vue";
 import BotLogo from "../icons/BotLogo.vue";
@@ -19,6 +20,8 @@ const { chatData, mode } = storeToRefs(chatStore);
 const { editDashboard } = storeToRefs(contentStore);
 const { user } = storeToRefs(authStore);
 
+const router = useRouter();
+const route = useRoute();
 const userMessage = ref("");
 const chatAreaRef = ref(null);
 const isStickyOpen = ref(false);
@@ -28,8 +31,14 @@ const visibleChatData = computed(() =>
 	chatData.value.filter((c) => !c.mode || c.mode === mode.value),
 );
 
-const qaBtnHandler = async (text, relations) => {
-	if (text === "建立儀表板") {
+const qaBtnHandler = async (btn, relations) => {
+	if (btn.action === "navigate_to_dashboard") {
+		const { index, city } = btn.payload;
+		if (route.query.index === index && route.query.city === city) return;
+		router.push({ path: "/dashboard", query: { index, city } });
+		return;
+	}
+	if (btn.text === "建立儀表板") {
 		if (dashboardCreationLoading.value === true) return;
 		dashboardCreationLoading.value = true;
 		// 確認個人儀表板是否超過20個
@@ -209,7 +218,7 @@ watch(
               <button
                 v-for="btn in chat.button"
                 :key="btn.id"
-                @click="qaBtnHandler(btn.text, chat.relations)"
+                @click="qaBtnHandler(btn, chat.relations)"
               >
                 {{ btn.text }}
               </button>
