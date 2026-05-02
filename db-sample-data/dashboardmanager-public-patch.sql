@@ -32,7 +32,8 @@ ON CONFLICT (dashboard_id, group_id) DO NOTHING;
 UPDATE dashboards
    SET components = ARRAY(
          SELECT DISTINCT x FROM unnest(
-           components || ARRAY[(SELECT id FROM components WHERE index = 'youbike_timemap')]
+           COALESCE(components, ARRAY[]::integer[])
+           || ARRAY[(SELECT id FROM components WHERE index = 'youbike_timemap')]
          ) AS t(x)
          WHERE x IS NOT NULL
        )

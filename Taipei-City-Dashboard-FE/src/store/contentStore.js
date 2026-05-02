@@ -120,6 +120,7 @@ export const useContentStore = defineStore("content", {
 				console.error("Failed to load YouBike shortage dashboard:", error);
 				this.cityDashboard.components = [];
 				this.currentDashboard.components = [];
+				this.currentDashboardExcluded.components = [];
 				this.error = true;
 			}
 			this.loading = false;

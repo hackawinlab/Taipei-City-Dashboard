@@ -19,12 +19,10 @@ const SLICES = {
 	taipei: {
 		city: "taipei",
 		datasetKey: "Taipei",
-		cityLabel: "臺北",
 	},
 	metrotaipei: {
 		city: "metrotaipei",
 		datasetKey: "All",
-		cityLabel: "雙北",
 	},
 };
 
