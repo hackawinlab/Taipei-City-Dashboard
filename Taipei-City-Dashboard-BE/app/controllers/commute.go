@@ -167,12 +167,13 @@ ORDER BY 1, 2`
 	}
 	defer rows.Close()
 
-	// Collect data grouped by city
+	// Collect data grouped by city into a map[city][hour] → shortage_pct
 	type hourPoint struct {
 		X string  `json:"x"`
 		Y float64 `json:"y"`
 	}
-	cityData := make(map[string][]hourPoint)
+	// cityHours holds the computed shortage_pct for each (city, hour) pair seen in DB results.
+	cityHours := make(map[string]map[int]float64)
 	cityOrder := []string{}
 
 	for rows.Next() {
@@ -192,14 +193,11 @@ ORDER BY 1, 2`
 			// round to 1 decimal
 			pct = float64(int(pct*10+0.5)) / 10
 		}
-		if _, exists := cityData[rowCity]; !exists {
+		if _, exists := cityHours[rowCity]; !exists {
 			cityOrder = append(cityOrder, rowCity)
-			cityData[rowCity] = []hourPoint{}
+			cityHours[rowCity] = make(map[int]float64)
 		}
-		cityData[rowCity] = append(cityData[rowCity], hourPoint{
-			X: strconv.Itoa(hour),
-			Y: pct,
-		})
+		cityHours[rowCity][hour] = pct
 	}
 	if err := rows.Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("rows error: %v", err)})
@@ -212,7 +210,15 @@ ORDER BY 1, 2`
 	}
 	series := []seriesEntry{}
 	for _, name := range cityOrder {
-		series = append(series, seriesEntry{Name: name, Data: cityData[name]})
+		data := make([]hourPoint, 24)
+		for h := 0; h < 24; h++ {
+			pct := 0.0
+			if v, ok := cityHours[name][h]; ok {
+				pct = v
+			}
+			data[h] = hourPoint{X: strconv.Itoa(h), Y: pct}
+		}
+		series = append(series, seriesEntry{Name: name, Data: data})
 	}
 
 	categories := make([]string, 24)
@@ -248,13 +254,11 @@ func GetYouBikeBlacklist(c *gin.Context) {
 	}
 
 	query := `
-SELECT station_uid, station_name, city, lat, lon,
-  COUNT(*) FILTER (WHERE available_bikes = 0)                                     AS empty_count,
-  COUNT(*)                                                                         AS total_count,
+SELECT station_name, city,
   ROUND(COUNT(*) FILTER (WHERE available_bikes=0)*100.0 / NULLIF(COUNT(*),0), 1) AS empty_pct
 FROM youbike_snapshots
 WHERE (city = $1 OR $1 = 'all')
-GROUP BY station_uid, station_name, city, lat, lon
+GROUP BY station_name, city
 HAVING COUNT(*) > 2
 ORDER BY empty_pct DESC
 LIMIT $2`
@@ -281,23 +285,14 @@ LIMIT $2`
 
 	for rows.Next() {
 		var (
-			stationUID   string
-			stationName  string
-			rowCity      string
-			lat, lon     float64
-			emptyCount   int64
-			totalCount   int64
-			emptyPct     sql.NullFloat64
+			stationName string
+			rowCity     string
+			emptyPct    sql.NullFloat64
 		)
-		if err := rows.Scan(&stationUID, &stationName, &rowCity, &lat, &lon, &emptyCount, &totalCount, &emptyPct); err != nil {
+		if err := rows.Scan(&stationName, &rowCity, &emptyPct); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("scan error: %v", err)})
 			return
 		}
-		_ = stationUID
-		_ = lat
-		_ = lon
-		_ = emptyCount
-		_ = totalCount
 		data = append(data, blacklistEntry{
 			X:    stationName,
 			Y:    emptyPct.Float64,
