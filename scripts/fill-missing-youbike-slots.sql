@@ -19,7 +19,9 @@ BEGIN
             SELECT
                 city,
                 EXTRACT(hour FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int AS h,
-                (EXTRACT(minute FROM snapshot_at AT TIME ZONE 'Asia/Taipei') / 15)::int AS q
+                -- floor(minute/15): cast to int BEFORE dividing so 38 → q=2,
+                -- not q=3 (numeric/15 + ::int rounds half-up).
+                (EXTRACT(minute FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) AS q
             FROM youbike_snapshots
             GROUP BY 1, 2, 3
         ),

@@ -174,18 +174,25 @@ func GetYouBikeStationHourly(c *gin.Context) {
 
 	const slotCount = 96
 
+	// One reading per 15-min slot: take the latest snapshot in each slot via
+	// DISTINCT ON. Avoids fractional values that AVG would produce when two
+	// CSV captures land in the same slot.
 	query := `
-SELECT (EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int * 4
-        + EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) AS slot,
-       ROUND(AVG(available_bikes)::numeric, 1)::float                            AS avg_available,
-       ROUND(AVG(electric_bikes)::numeric, 1)::float                             AS avg_electric,
-       MAX(total_docks)                                                          AS total_docks,
-       MAX(station_name)                                                         AS station_name,
-       MAX(city)                                                                 AS city
-FROM youbike_snapshots
-WHERE station_uid = $1
-GROUP BY 1
-ORDER BY 1`
+SELECT DISTINCT ON (slot)
+       slot,
+       available_bikes::float AS avg_available,
+       electric_bikes::float  AS avg_electric,
+       total_docks            AS total_docks,
+       station_name,
+       city
+FROM (
+  SELECT (EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int * 4
+          + EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) AS slot,
+         snapshot_at, available_bikes, electric_bikes, total_docks, station_name, city
+  FROM youbike_snapshots
+  WHERE station_uid = $1
+) s
+ORDER BY slot, snapshot_at DESC`
 
 	sqlDB, err := models.DBHackathon.DB()
 	if err != nil {
