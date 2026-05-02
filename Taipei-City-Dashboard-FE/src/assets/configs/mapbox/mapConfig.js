@@ -352,13 +352,7 @@ export const maplayerCommonPaint = {
 			10, "#f97316",
 			30, "#22c55e"
 		],
-		"circle-radius": [
-			"interpolate",
-			["linear"],
-			["get", "total_docks"],
-			10, 4,
-			50, 9
-		],
+		"circle-radius": 3,
 		"circle-opacity": 0.85,
 		"circle-stroke-width": 1,
 		"circle-stroke-color": "#1a1a1a",

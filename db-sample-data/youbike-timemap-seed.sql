@@ -17,7 +17,7 @@ ON CONFLICT (index) DO NOTHING;
 -- 4. Map config (api source)
 INSERT INTO component_maps (index, title, type, source, api_endpoint, paint)
 SELECT 'youbike_timemap', 'YouBike站點時段可用率', 'circle', 'api',
-       '/api/v1/commute/youbike/map',
+       '/api/commute/youbike/map',
        '{"circle-color":["step",["get","availability_pct"],"#ef4444",10,"#f97316",30,"#22c55e"],"circle-radius":["interpolate",["linear"],["get","total_docks"],10,4,50,9],"circle-opacity":0.85,"circle-stroke-width":1,"circle-stroke-color":"#1a1a1a"}'
 WHERE NOT EXISTS (SELECT 1 FROM component_maps WHERE index = 'youbike_timemap');
 

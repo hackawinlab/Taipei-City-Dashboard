@@ -15,7 +15,13 @@ const props = defineProps([
 
 const mapStore = useMapStore();
 
-const currentHour = ref(new Date().getHours());
+const SLOTS_PER_HOUR = 4;
+const TOTAL_SLOTS = 24 * SLOTS_PER_HOUR; // 96
+
+const now = new Date();
+const currentSlot = ref(
+	now.getHours() * SLOTS_PER_HOUR + Math.floor(now.getMinutes() / 15),
+);
 const playing = ref(false);
 const cache = reactive({});
 
@@ -29,26 +35,36 @@ const layerId = computed(() => {
 	return `${cfg.index}-${cfg.type}-${cfg.city}`;
 });
 
-async function fetchHour(hour) {
+const currentLabel = computed(() => {
+	const h = Math.floor(currentSlot.value / SLOTS_PER_HOUR);
+	const m = (currentSlot.value % SLOTS_PER_HOUR) * 15;
+	return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+});
+
+async function fetchSlot(slot) {
 	if (!layerId.value) return;
-	if (cache[hour]) {
-		mapStore.updateTimeMapSource(layerId.value, cache[hour]);
+	if (cache[slot]) {
+		mapStore.updateTimeMapSource(layerId.value, cache[slot]);
 		return;
 	}
+	const hour = Math.floor(slot / SLOTS_PER_HOUR);
+	const quarter = slot % SLOTS_PER_HOUR;
 	try {
-		const res = await http.get(`/commute/youbike/map?city=all&hour=${hour}`);
-		cache[hour] = res.data;
+		const res = await http.get(
+			`/commute/youbike/map?city=all&hour=${hour}&quarter=${quarter}`,
+		);
+		cache[slot] = res.data;
 		mapStore.updateTimeMapSource(layerId.value, res.data);
 	} catch (e) {
-		console.warn("YouBikeTimeMap fetchHour failed", e);
+		console.warn("YouBikeTimeMap fetchSlot failed", e);
 	}
 }
 
 async function prefetchAll() {
-	for (let h = 0; h < 24; h++) {
+	for (let s = 0; s < TOTAL_SLOTS; s++) {
 		if (unmounted) return;
-		await fetchHour(h);
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await fetchSlot(s);
+		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
 }
 
@@ -62,14 +78,14 @@ function togglePlay() {
 		playing.value = true;
 		prefetchAll();
 		playInterval = setInterval(() => {
-			currentHour.value = (currentHour.value + 1) % 24;
-		}, 800);
+			currentSlot.value = (currentSlot.value + 1) % TOTAL_SLOTS;
+		}, 350);
 	}
 }
 
-watch(currentHour, (h) => {
+watch(currentSlot, (s) => {
 	clearTimeout(debounceTimer);
-	debounceTimer = setTimeout(() => fetchHour(h), 200);
+	debounceTimer = setTimeout(() => fetchSlot(s), 150);
 });
 
 function pauseIfPlaying() {
@@ -88,9 +104,9 @@ onUnmounted(() => {
     v-if="activeChart === 'YouBikeTimeMap'"
     class="youbike-timemap"
   >
-    <!-- Header: hour label + play button -->
+    <!-- Header: time label + play button -->
     <div class="youbike-timemap-header">
-      <span class="hour-label">{{ String(currentHour).padStart(2, "0") }}:00</span>
+      <span class="hour-label">{{ currentLabel }}</span>
       <button
         class="play-btn"
         @click="togglePlay"
@@ -98,19 +114,19 @@ onUnmounted(() => {
         <span>{{ playing ? "pause" : "play_arrow" }}</span>
       </button>
     </div>
-    <!-- Slider -->
+    <!-- Slider (96 × 15-min slots) -->
     <div class="youbike-timemap-slider">
       <span>00:00</span>
       <input
-        v-model.number="currentHour"
+        v-model.number="currentSlot"
         type="range"
         min="0"
-        max="23"
+        :max="TOTAL_SLOTS - 1"
         step="1"
         @mousedown="pauseIfPlaying"
         @touchstart="pauseIfPlaying"
       >
-      <span>23:00</span>
+      <span>23:45</span>
     </div>
     <!-- Legend -->
     <div class="youbike-timemap-legend">

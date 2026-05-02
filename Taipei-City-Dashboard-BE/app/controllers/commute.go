@@ -29,7 +29,12 @@ func youbikeDefaultHour() int {
 }
 
 // GetYouBikeMap handles GET /api/v1/commute/youbike/map
-// Query params: city (Taipei|NewTaipei|all, default all), hour (0-23, default current hour)
+// Query params:
+//
+//	city    (Taipei|NewTaipei|all, default all)
+//	hour    (0-23, default current hour)
+//	quarter (0-3, optional — restricts to one 15-minute slot of the hour:
+//	         0=[:00,:15), 1=[:15,:30), 2=[:30,:45), 3=[:45,:60))
 func GetYouBikeMap(c *gin.Context) {
 	city := c.DefaultQuery("city", "all")
 	if !youbikeValidateCity(city) {
@@ -50,6 +55,16 @@ func GetYouBikeMap(c *gin.Context) {
 		}
 	}
 
+	quarter := -1
+	if quarterStr := c.Query("quarter"); quarterStr != "" {
+		q, err := strconv.Atoi(quarterStr)
+		if err != nil || q < 0 || q > 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid quarter: must be an integer 0–3"})
+			return
+		}
+		quarter = q
+	}
+
 	if models.DBHackathon == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "hackathon database not available"})
 		return
@@ -62,7 +77,14 @@ SELECT station_uid, station_name, lat, lon, city,
   MAX(total_docks)                                                                 AS total_docks
 FROM youbike_snapshots
 WHERE (city = $1 OR $1 = 'all')
-  AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2
+  AND EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei') = $2`
+	args := []interface{}{city, hour}
+	if quarter >= 0 {
+		query += `
+  AND (EXTRACT(MINUTE FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int / 15) = $3`
+		args = append(args, quarter)
+	}
+	query += `
 GROUP BY station_uid, station_name, lat, lon, city
 ORDER BY availability_pct ASC`
 
@@ -72,7 +94,7 @@ ORDER BY availability_pct ASC`
 		return
 	}
 
-	rows, err := sqlDB.Query(query, city, hour)
+	rows, err := sqlDB.Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err)})
 		return
