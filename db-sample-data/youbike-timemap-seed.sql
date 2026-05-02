@@ -14,14 +14,12 @@ INSERT INTO components (index, name)
 VALUES ('youbike_timemap', 'YouBike 一日可用率動態地圖')
 ON CONFLICT (index) DO NOTHING;
 
--- 4. Map config (api source, symbol layer using bike sprites by availability_pct,
---    clustering enabled for zoomed-out views)
-INSERT INTO component_maps (index, title, type, source, icon, api_endpoint, paint, property)
+-- 4. Map config (api source, symbol layer using bike sprites by availability_pct)
+INSERT INTO component_maps (index, title, type, source, icon, api_endpoint, paint)
 SELECT 'youbike_timemap', 'YouBike站點時段可用率', 'symbol', 'api',
        'youbike-availability',
        '/api/commute/youbike/map',
-       '{}',
-       '{"cluster":{"clusterRadius":50,"clusterMaxZoom":14}}'
+       '{}'
 WHERE NOT EXISTS (SELECT 1 FROM component_maps WHERE index = 'youbike_timemap');
 
 -- 5. Query charts (taipei and metrotaipei)
