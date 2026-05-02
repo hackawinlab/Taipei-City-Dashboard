@@ -448,10 +448,39 @@ export const useMapStore = defineStore("map", {
 					this.fetchLocalGeoJson(appendLayer);
 				} else if (element.source === "raster") {
 					this.addRasterSource(appendLayer);
+				} else if (element.source === "api") {
+					this.fetchApiGeoJson(appendLayer);
 				}
 			});
 		},
 		// 2. Call an API to get the layer data
+		async fetchApiGeoJson(map_config) {
+			try {
+				const now = new Date();
+				const taipeiHour = parseInt(
+					now.toLocaleString("en-US", {
+						timeZone: "Asia/Taipei",
+						hour: "numeric",
+						hour12: false,
+					}),
+					10
+				);
+				const res = await axios.get(
+					`${map_config.api_endpoint}?city=all&hour=${taipeiHour}`
+				);
+				this.map.addSource(`${map_config.layerId}-source`, {
+					type: "geojson",
+					data: res.data,
+				});
+				this.addMapLayer(map_config);
+			} catch (e) {
+				console.error("fetchApiGeoJson failed", e);
+			} finally {
+				this.loadingLayers = this.loadingLayers.filter(
+					(el) => el !== map_config.layerId
+				);
+			}
+		},
 		fetchLocalGeoJson(map_config) {
 			axios
 				.get(`/mapData/${map_config.index}.geojson`)
@@ -2560,6 +2589,12 @@ export const useMapStore = defineStore("map", {
 			});
 
 			this.flyToLocation(res.geometry.coordinates);
+		},
+
+		/* Update a GeoJSON source with new data (e.g. time slider) */
+		updateTimeMapSource(layerId, geojsonData) {
+			const source = this.map.getSource(`${layerId}-source`);
+			if (source) source.setData(geojsonData);
 		},
 
 		/* Clearing the map */
