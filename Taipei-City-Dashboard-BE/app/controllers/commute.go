@@ -529,9 +529,12 @@ func GetYouBikeShortageAnalysis(c *gin.Context) {
 	c.JSON(http.StatusOK, payload)
 }
 
-// chartTwoDimSeries / chartTwoDimResponse mirror the standard /component/:id/chart
-// response shape (componentData.go's TwoDimensionalDataOutput) so frontend
-// chart-data plumbing can consume api_endpoint replies without branching.
+// chartTwoDimSeries / chartTwoDimResponse follow the {status, data:[{name,data}], categories}
+// envelope the FE expects from /component/:id/chart for three_d/percent query types
+// (the SQL two_d shape has no `name` and no top-level `categories`). The seed marks
+// these rows as `query_type='two_d'` for SQL-path consistency, but the SQL is never
+// executed: api_endpoint short-circuits the GORM path entirely. The "TwoDim" naming
+// just reflects the {x,y} data points, not the query_type discriminator.
 type chartTwoDimSeries struct {
 	Name string             `json:"name"`
 	Data []chartTwoDimPoint `json:"data"`

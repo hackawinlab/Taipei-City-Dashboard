@@ -74,10 +74,12 @@ type hourCity struct {
 	LowStations   int
 }
 
-// Payload mirrors the subset of the original aggregator JSON that the
-// frontend actually reads (see controllers/commute.go's GetYouBikePersistenceChart
-// and GetYouBikeImbalanceChart — rhythm and heatmap blocks are computed but no
-// longer surfaced to the dashboard, pending a follow-up PR that slims this down).
+// Payload mirrors the subset of the original aggregator JSON that the dashboard
+// reads. The two new chart endpoints (controllers/commute.go's GetYouBikePersistenceChart,
+// GetYouBikeImbalanceChart) consume only BarPersistence and Imbalance. TimelineLow
+// and Heatmap remain in the struct because the legacy /commute/youbike/shortage-analysis
+// endpoint still serves the full payload; once that route is retired they can be
+// dropped (tracked in CLAUDE.md "遺留" note).
 type Payload struct {
 	TimelineLow    []TimelineSeries                     `json:"timeline_low"`
 	BarPersistence map[string][]PersistenceEntry        `json:"bar_persistence"`
