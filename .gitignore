@@ -80,5 +80,6 @@ Taipei-City-Dashboard-DE/docker/prod/.env
 CLAUDE.local.md
 **/CLAUDE.local.md
 
-# Local-only narrative notes for the YouBike shortage dashboard work
+# Local-only narrative notes & process artifacts for in-flight feature work
 STORY-youbike-shortage-dashboard.md
+/docs/superpowers/
