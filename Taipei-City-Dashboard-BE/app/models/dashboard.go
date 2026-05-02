@@ -331,3 +331,110 @@ func DeleteDashboard(index string, groups []int) (err error) {
 	tx.Commit()
 	return nil
 }
+
+// CatalogueRow is used to build the system-prompt catalogue for the AI navigate tool.
+type CatalogueRow struct {
+	Index           string
+	Name            string
+	City            string
+	ComponentTitles []string
+}
+
+// catalogueCities is the set of city group names exposed to the AI catalogue.
+// Restricted to groups whose dashboards are renderable from the FE sidebar
+// (cityManager.activeCities = ["taipei","metrotaipei"]); "public" group
+// dashboards are excluded because the FE never picks them up.
+var catalogueCities = []string{"taipei", "metrotaipei"}
+
+// GetCatalogueRows returns one row per (dashboard, group) tuple for every
+// non-personal group whose name is in catalogueCities, with the dashboard's
+// component display names resolved via the components table.
+func GetCatalogueRows() ([]CatalogueRow, error) {
+	type tupleRow struct {
+		Index      string        `gorm:"column:index"`
+		Name       string        `gorm:"column:name"`
+		Components pq.Int64Array `gorm:"column:components;type:int[]"`
+		City       string        `gorm:"column:city"`
+	}
+	var tuples []tupleRow
+	err := DBManager.
+		Table("dashboards").
+		Select("dashboards.index, dashboards.name, dashboards.components, groups.name as city").
+		Joins("JOIN dashboard_groups ON dashboards.id = dashboard_groups.dashboard_id").
+		Joins("JOIN groups ON dashboard_groups.group_id = groups.id AND groups.is_personal = false").
+		Where("groups.name IN (?)", catalogueCities).
+		Order("groups.name, dashboards.id").
+		Find(&tuples).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	if len(tuples) == 0 {
+		return nil, nil
+	}
+
+	idSet := map[int64]struct{}{}
+	for _, t := range tuples {
+		for _, id := range t.Components {
+			idSet[id] = struct{}{}
+		}
+	}
+	nameByID := make(map[int64]string, len(idSet))
+	if len(idSet) > 0 {
+		ids := make([]int64, 0, len(idSet))
+		for id := range idSet {
+			ids = append(ids, id)
+		}
+		var comps []Component
+		if err := DBManager.Table("components").Where("id IN (?)", ids).Find(&comps).Error; err != nil {
+			return nil, err
+		}
+		for _, c := range comps {
+			nameByID[c.ID] = c.Name
+		}
+	}
+
+	rows := make([]CatalogueRow, 0, len(tuples))
+	for _, t := range tuples {
+		titles := make([]string, 0, len(t.Components))
+		for _, id := range t.Components {
+			if name, ok := nameByID[id]; ok && name != "" {
+				titles = append(titles, name)
+			}
+		}
+		rows = append(rows, CatalogueRow{
+			Index:           t.Index,
+			Name:            t.Name,
+			City:            t.City,
+			ComponentTitles: titles,
+		})
+	}
+	return rows, nil
+}
+
+// IsValidDashboardForCity reports whether a (index, city) pair is exposed
+// by the catalogue — i.e. the dashboard exists, belongs to a non-personal
+// group with that city name, and that name is allowed.
+func IsValidDashboardForCity(index, city string) (bool, error) {
+	allowed := false
+	for _, c := range catalogueCities {
+		if c == city {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return false, nil
+	}
+	var count int64
+	err := DBManager.
+		Table("dashboards").
+		Joins("JOIN dashboard_groups ON dashboards.id = dashboard_groups.dashboard_id").
+		Joins("JOIN groups ON dashboard_groups.group_id = groups.id AND groups.is_personal = false").
+		Where("dashboards.index = ? AND groups.name = ?", index, city).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}

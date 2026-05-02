@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import http from "../router/axios";
+import { useControlBus } from "../composables/useControlBus";
 
 export const useChatStore = defineStore('chat', () => {
   	// 預設訊息
@@ -8,7 +9,8 @@ export const useChatStore = defineStore('chat', () => {
     	{
       		id: 1,
       		role: 'bot',
-	  		isDefault: true,
+		  	mode: null,
+		  	isDefault: true,
       		content:
         	'您好，我是【臺北城市儀表板】小幫手，很高興為您服務！\n 您可以： \n\n • 點擊左側既有的儀表板主題，快速查看各主題內容 \n • 輸入您感興趣的主題描述，我會自動為您組建最適合的儀表板 \n\n 如果有想了解的內容，歡迎直接告訴我，我會盡力協助！\n\n 📩 聯絡信箱：tuic@gov.taipei \n 🏢 臺北大數據中心 \n\n',
     	},
@@ -16,11 +18,17 @@ export const useChatStore = defineStore('chat', () => {
 
 	const recommendComponents = ref(null)
 
+	// 聊天 / 搜尋 模式
+	const mode = ref("chat")
+
   	// 從 sessionStorage 讀取
   	const savedChatData = JSON.parse(sessionStorage.getItem('chatData')) || [];
 
   	// 拼接預設訊息 + sessionStorage 的聊天紀錄
   	const chatData = ref([...defaultChatData, ...savedChatData]);
+
+	let _nextId = chatData.value.reduce((max, m) => Math.max(max, m.id ?? 0), 0) + 1;
+	const nextId = () => _nextId++;
 
   	// 監聽 chatData 的變化，自動同步到 sessionStorage
   	watch(
@@ -34,12 +42,12 @@ export const useChatStore = defineStore('chat', () => {
   	);
 
   	const addChatData = (newChatData) => {
-    	chatData.value.push({ id: chatData.value.length + 1, isDefault: false, ...newChatData });
+    	chatData.value.push({ id: nextId(), isDefault: false, ...newChatData });
   	};
 
   	const addQueryData = async (newChatData) => {
 
-    	chatData.value.push({ id: chatData.value.length + 1, isDefault: false, ...newChatData });
+    	chatData.value.push({ id: nextId(), mode: "search", isDefault: false, ...newChatData });
 
 		recommendComponents.value = [];
 		let topK = null;
@@ -85,32 +93,86 @@ export const useChatStore = defineStore('chat', () => {
 			// 把 result 蓋回去 recommendComponents
 			recommendComponents.value = result
 
-		} catch (error) { 
+		} catch (error) {
 			console.error("VectorAnalysisError :", error);
 		}
 
 		if (recommendComponents.value && recommendComponents.value?.length > 0) {
 			topK = [...recommendComponents.value].sort((a, b) => b.score - a.score);
-			chatData.value.push({ id: chatData.value.length + 1, role: 'bot', isDefault: false, button: [{ id:1, text:'建立儀表板' }], content: `您好 😊 \n 以下是根據您的問題，自動為您推薦的「組件清單」。您可以將這些組件整批加入「個人儀表板」，方便日後快速查看與使用。\n`, relations: topK });
-			chatData.value.push({ id: chatData.value.length + 1, role: 'bot', isDefault: false, content: `若您有任何新的查詢或想深入探索的內容，都可以隨時在對話框告訴我～\n 我很樂意再協助您 💬✨` });
+			chatData.value.push({ id: nextId(), role: 'bot', mode: "search", isDefault: false, button: [{ id:1, text:'建立儀表板' }], content: `您好 😊 \n 以下是根據您的問題，自動為您推薦的「組件清單」。您可以將這些組件整批加入「個人儀表板」，方便日後快速查看與使用。\n`, relations: topK });
+			chatData.value.push({ id: nextId(), role: 'bot', mode: "search", isDefault: false, content: `若您有任何新的查詢或想深入探索的內容，都可以隨時在對話框告訴我～\n 我很樂意再協助您 💬✨` });
 		} else {
-			chatData.value.push({ id: chatData.value.length + 1, role: 'bot', isDefault: false, content: `很抱歉，您提供的描述沒有相似組件，請繼續提問 ! ` });
+			chatData.value.push({ id: nextId(), role: 'bot', mode: "search", isDefault: false, content: `很抱歉，您提供的描述沒有相似組件，請繼續提問 ! ` });
 		}
 
 		// 分析結束後紀錄問答log
 		saveChatLog(newChatData.content, recommendComponents.value);
   	};
 
+	function getOrCreateSessionId() {
+		const d = new Date();
+		return (
+			"session_" +
+			d.getFullYear() +
+			String(d.getMonth() + 1).padStart(2, "0") +
+			String(d.getDate()).padStart(2, "0")
+		);
+	}
+
+	const sendMessage = async (text) => {
+		if (!text?.trim()) return;
+		chatData.value.push({ id: nextId(), role: "user", mode: "chat", isDefault: false, content: text });
+		chatData.value.push({ id: nextId(), role: "bot", mode: "chat", isDefault: false, content: "", streaming: true });
+		const placeholderIdx = chatData.value.length - 1;
+
+		try {
+			const history = chatData.value
+				.filter((m) => !m.isDefault && m.mode === "chat" && !m.streaming && m.content)
+				.slice(-10)
+				.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
+
+			const res = await http.post("/ai/chat/twai", {
+				session: getOrCreateSessionId(),
+				stream: false,
+				messages: history,
+			});
+			const data = res.data?.data ?? {};
+			chatData.value[placeholderIdx].content = data.content || "";
+			const seen = new Set();
+			const navEvents = [];
+			const otherEvents = [];
+			for (const e of (data.control_events ?? [])) {
+				if (e.action === "navigate_to_dashboard") {
+					const key = `${e.payload?.index}:${e.payload?.city}`;
+					if (!seen.has(key)) {
+						seen.add(key);
+						navEvents.push(e);
+					}
+				} else {
+					otherEvents.push(e);
+				}
+			}
+			if (navEvents.length > 0) {
+				chatData.value[placeholderIdx].button = navEvents.map((e, i) => ({
+					id: i + 1,
+					text: "切換到此儀表板",
+					action: e.action,
+					payload: e.payload,
+				}));
+			}
+			otherEvents.forEach((e) => useControlBus().emit(e.action, e.payload));
+			saveChatLog(text, chatData.value[placeholderIdx].content);
+		} catch (err) {
+			chatData.value[placeholderIdx].content = `(發生錯誤：${err?.response?.data?.message || err.message})`;
+		} finally {
+			chatData.value[placeholderIdx].streaming = false;
+		}
+	};
+
 	const saveChatLog = async(question, answer) => {
 		try {
         	const formData = new FormData();
-        	const d = new Date();
-        	const todayId =
-          		d.getFullYear() +
-          		String(d.getMonth() + 1).padStart(2, "0") +
-          		String(d.getDate()).padStart(2, "0");
-
-        	formData.append("session", "session_" + todayId);
+        	formData.append("session", getOrCreateSessionId());
         	formData.append("question", question);
         	formData.append("answer", JSON.stringify(answer));
 
@@ -124,5 +186,5 @@ export const useChatStore = defineStore('chat', () => {
       	}
 	};
 
-	return { chatData, addChatData, addQueryData, saveChatLog }
+	return { chatData, mode, addChatData, addQueryData, sendMessage, saveChatLog }
 })

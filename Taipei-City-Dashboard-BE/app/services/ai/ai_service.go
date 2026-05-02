@@ -2,6 +2,7 @@ package ai
 
 import (
 	"TaipeiCityDashboardBE/app/models"
+	"TaipeiCityDashboardBE/app/services/ai/control"
 	"TaipeiCityDashboardBE/app/services/ai/providers/twcc"
 	"TaipeiCityDashboardBE/app/services/ai/tools"
 	"TaipeiCityDashboardBE/global"
@@ -98,8 +99,30 @@ func (s *aiSession) run(ctx context.Context) (*models.AIChatLog, error) {
 		if err := s.executeTools(ctx, toolCalls); err != nil {
 			break
 		}
+		// UI control events are fire-and-done; stop looping so the LLM
+		// cannot call the same tool again in subsequent iterations.
+		if control.HasEvents(ctx) {
+			break
+		}
 	}
+
+	// If tools were used but the final LLM response has no text (e.g. the loop
+	// was exhausted while the LLM was still emitting tool calls), strip tools
+	// from options and generate once more to force a plain-text summary.
+	if s.lastErr == nil && s.toolUsed && s.lastTextContent() == "" {
+		s.options = append(s.options, llms.WithTools(nil))
+		s.sendHeartbeat(ctx)
+		s.generate(ctx)
+	}
+
 	return s.finalize()
+}
+
+func (s *aiSession) lastTextContent() string {
+	if s.lastResp == nil || len(s.lastResp.Choices) == 0 {
+		return ""
+	}
+	return s.lastResp.Choices[0].Content
 }
 
 func (s *aiSession) sendHeartbeat(ctx context.Context) {
@@ -181,6 +204,16 @@ func (s *aiSession) injectInstructions() {
 	}
 
 	instruction := fmt.Sprintf("\nSystem Instruction:\n1. Use ONLY: [%s].\n2. NEVER nest tool calls \n3. Arguments MUST be literal values (strings, integers, etc.), never function calls \n4. For dependent tasks, call tools sequentially in separate turns.\n5. If stuck, respond with text.", toolNames)
+
+	for _, t := range s.callOpts.Tools {
+		if t.Function != nil && t.Function.Name == tools.NavigateToDashboardName {
+			catalogue := DashboardCatalogueMarkdown()
+			if catalogue != "" {
+				instruction += "\n\nYou can suggest the user to navigate to a dashboard by calling navigate_to_dashboard.\nRules:\n- Call navigate_to_dashboard AT MOST ONCE per user message.\n- After the tool call succeeds, ALWAYS reply in Traditional Chinese with one sentence suggesting which dashboard to check, e.g. \"建議您查看「XXX」儀表板，可點擊下方按鈕切換。\" (A button will appear below the message for the user to click.)\n- Do NOT call navigate_to_dashboard again after you have already called it in this turn.\n- Do NOT invent indices; use only indices from the catalogue below.\nCity rule: 台北 / 北市 / 台北市 → \"taipei\"; 雙北 / 新北 / 新北市 → \"metrotaipei\". If unclear, default \"taipei\".\n\nAvailable dashboards:\n" + catalogue
+			}
+			break
+		}
+	}
 	
 	s.currentMessages = make([]llms.MessageContent, 0)
 	merged := false
@@ -195,8 +228,8 @@ func (s *aiSession) injectInstructions() {
 	
 	if !merged {
 		s.currentMessages = append([]llms.MessageContent{{
-			Role: llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Instruction: Use tools: [" + toolNames + "]."}},
+			Role:  llms.ChatMessageTypeSystem,
+			Parts: []llms.ContentPart{llms.TextContent{Text: instruction}},
 		}}, s.currentMessages...)
 	}
 }

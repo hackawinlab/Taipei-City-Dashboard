@@ -1,5 +1,6 @@
 <script setup>
-import { ref, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import SendIcon from "../icons/SendIcon.vue";
 import BotLogo from "../icons/BotLogo.vue";
@@ -13,19 +14,31 @@ import http from "../../router/axios";
 const chatStore = useChatStore();
 const contentStore = useContentStore();
 const authStore = useAuthStore();
-const { addChatData, addQueryData, saveChatLog } = chatStore;
+const { addChatData, addQueryData, sendMessage, saveChatLog } = chatStore;
 const { createDashboard } = contentStore;
-const { chatData } = storeToRefs(chatStore);
+const { chatData, mode } = storeToRefs(chatStore);
 const { editDashboard } = storeToRefs(contentStore);
 const { user } = storeToRefs(authStore);
 
+const router = useRouter();
+const route = useRoute();
 const userMessage = ref("");
 const chatAreaRef = ref(null);
 const isStickyOpen = ref(false);
 const dashboardCreationLoading = ref(false);
 
-const qaBtnHandler = async (text, relations) => {
-	if (text === "建立儀表板") {
+const visibleChatData = computed(() =>
+	chatData.value.filter((c) => !c.mode || c.mode === mode.value),
+);
+
+const qaBtnHandler = async (btn, relations) => {
+	if (btn.action === "navigate_to_dashboard") {
+		const { index, city } = btn.payload;
+		if (route.query.index === index && route.query.city === city) return;
+		router.push({ path: "/dashboard", query: { index, city } });
+		return;
+	}
+	if (btn.text === "建立儀表板") {
 		if (dashboardCreationLoading.value === true) return;
 		dashboardCreationLoading.value = true;
 		// 確認個人儀表板是否超過20個
@@ -63,11 +76,12 @@ const qaBtnHandler = async (text, relations) => {
 };
 
 const sendBtnHandler = (text) => {
-	if (!text.trim()) return;
-	addQueryData({
-		role: "user",
-		content: text,
-	});
+	if (!text?.trim()) return;
+	if (mode.value === "chat") {
+		sendMessage(text);
+	} else {
+		addQueryData({ role: "user", content: text });
+	}
 	userMessage.value = "";
 };
 
@@ -94,6 +108,22 @@ watch(
       <h3>臺北城市儀表板小幫手</h3>
     </div>
 
+    <!-- 模式切換 -->
+    <div class="mode-tabs">
+      <button
+        :class="{ active: mode === 'chat' }"
+        @click="mode = 'chat'"
+      >
+        聊天
+      </button>
+      <button
+        :class="{ active: mode === 'search' }"
+        @click="mode = 'search'"
+      >
+        組件搜尋
+      </button>
+    </div>
+
     <!-- 聊天區 -->
     <div
       ref="chatAreaRef"
@@ -114,12 +144,12 @@ watch(
           v-show="isStickyOpen"
           class="sticky-body"
         >
-          <span>小幫手會依據您輸入的內容，自動檢索本站臺的組件資料庫，並回傳相似度較高的組件清單，協助您快速找到符合需求的元件或資訊。<br><br>
-            目前小幫手僅提供組件比對與分析服務，不支援一般聊天功能。如造成不便，敬請見諒！</span>
+          <span v-if="mode === 'chat'">聊天模式：您可以直接詢問台北市相關資訊，小幫手將為您導航至對應的儀表板頁面。</span>
+          <span v-else>組件搜尋模式：小幫手會依據您輸入的內容，自動檢索組件資料庫，並回傳相似度較高的組件清單。</span>
         </div>
       </div>
       <div
-        v-for="chat in chatData"
+        v-for="chat in visibleChatData"
         :key="chat.id"
         class="message"
       >
@@ -133,7 +163,15 @@ watch(
           </div>
           <div class="content">
             <div
-              v-if="chat.content"
+              v-if="chat.streaming"
+              class="message--bubble"
+            >
+              <p class="typing-indicator">
+                <span /><span /><span />
+              </p>
+            </div>
+            <div
+              v-else-if="chat.content != null"
               class="message--bubble"
             >
               <p>{{ chat.content }}</p>
@@ -180,7 +218,7 @@ watch(
               <button
                 v-for="btn in chat.button"
                 :key="btn.id"
-                @click="qaBtnHandler(btn.text, chat.relations)"
+                @click="qaBtnHandler(btn, chat.relations)"
               >
                 {{ btn.text }}
               </button>
@@ -212,7 +250,7 @@ watch(
       <input
         v-model="userMessage"
         type="text"
-        placeholder="輸入訊息..."
+        :placeholder="mode === 'chat' ? '想了解台北市什麼資訊？' : '描述您要的組件功能'"
         @keyup.enter="sendBtnHandler(userMessage)"
       >
       <button @click="sendBtnHandler(userMessage)">
@@ -280,6 +318,33 @@ $radius-20: 20px;
 			font-weight: 700;
 			color: $white;
 			margin: 0;
+		}
+	}
+
+	.mode-tabs {
+		display: flex;
+		background: $card-bg;
+		border-bottom: 1px solid $border-color;
+
+		button {
+			flex: 1;
+			padding: 0.5rem;
+			background: transparent;
+			border: none;
+			color: rgba(255, 255, 255, 0.5);
+			font-size: 13px;
+			cursor: pointer;
+			transition: color 0.2s, border-bottom 0.2s;
+			border-bottom: 2px solid transparent;
+
+			&.active {
+				color: $white;
+				border-bottom: 2px solid $white;
+			}
+
+			&:hover:not(.active) {
+				color: rgba(255, 255, 255, 0.8);
+			}
 		}
 	}
 
@@ -406,6 +471,23 @@ $radius-20: 20px;
 							padding-right: 16px;
 							font-size: 16px;
 						}
+
+						.typing-indicator {
+							display: flex;
+							align-items: center;
+							gap: 4px;
+
+							span {
+								width: 6px;
+								height: 6px;
+								background: $white;
+								border-radius: 50%;
+								animation: typing-bounce 1.2s infinite ease-in-out;
+
+								&:nth-child(2) { animation-delay: 0.2s; }
+								&:nth-child(3) { animation-delay: 0.4s; }
+							}
+						}
 					}
 
 					.message--button {
@@ -467,5 +549,10 @@ $radius-20: 20px;
 			}
 		}
 	}
+}
+
+@keyframes typing-bounce {
+	0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+	40% { transform: scale(1); opacity: 1; }
 }
 </style>

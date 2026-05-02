@@ -17,7 +17,7 @@ import {
 	computed,
 	watch,
 } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "./store/authStore";
 import { useDialogStore } from "./store/dialogStore";
 import { useContentStore } from "./store/contentStore";
@@ -41,6 +41,7 @@ const timeToUpdate = ref(600);
 
 const mapStore = useMapStore();
 const route = useRoute();
+const router = useRouter();
 const updateBoards =
 	import.meta.env.VITE_PERSONAL_BOARD_UPDATE?.split(",") || [];
 const boardIndex = ref(null);
