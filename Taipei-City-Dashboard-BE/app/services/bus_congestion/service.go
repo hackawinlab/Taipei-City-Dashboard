@@ -152,14 +152,24 @@ func (s *BusCongestionService) RefreshMap(ctx context.Context) {
 	// Write GeoJSON files
 	if fePublic := global.BusFEPublicDir; fePublic != "" {
 		mapDataDir := filepath.Join(fePublic, "mapData")
-		if err := os.MkdirAll(mapDataDir, 0755); err == nil {
-			if data, err := json.Marshal(absGJ); err == nil {
-				os.WriteFile(filepath.Join(mapDataDir, "bus_congestion_abs.geojson"), data, 0644)
+		if err := os.MkdirAll(mapDataDir, 0755); err != nil {
+			logs.FError("[bus_congestion] mkdir %s failed: %v", mapDataDir, err)
+		} else {
+			writeGJ := func(name string, gj GeoJSONCollection) {
+				path := filepath.Join(mapDataDir, name)
+				data, err := json.Marshal(gj)
+				if err != nil {
+					logs.FError("[bus_congestion] marshal %s failed: %v", name, err)
+					return
+				}
+				if err := os.WriteFile(path, data, 0644); err != nil {
+					logs.FError("[bus_congestion] write %s failed: %v", path, err)
+					return
+				}
+				logs.FInfo("[bus_congestion] wrote %s (%d bytes)", path, len(data))
 			}
-			if data, err := json.Marshal(deltaGJ); err == nil {
-				os.WriteFile(filepath.Join(mapDataDir, "bus_congestion_delta.geojson"), data, 0644)
-			}
-			logs.FInfo("[bus_congestion] GeoJSON written to %s", mapDataDir)
+			writeGJ("bus_congestion_abs.geojson", absGJ)
+			writeGJ("bus_congestion_delta.geojson", deltaGJ)
 		}
 	}
 

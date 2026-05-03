@@ -18,7 +18,6 @@ const props = defineProps([
 	"chart_config",
 	"activeChart",
 	"activeCity",
-	"series",
 	"map_config",
 	"map_filter",
 	"map_filter_on",
@@ -104,12 +103,17 @@ async function loadTimeline() {
 	}
 }
 
+// Reset selectedRoute on city change; the selectedRoute watcher then
+// triggers the single loadTimeline call (avoids double-fetch on switch).
 watch(
 	cityScope,
 	() => {
-		selectedRoute.value = "";
 		loadRoutes();
-		loadTimeline();
+		if (selectedRoute.value !== "") {
+			selectedRoute.value = "";
+		} else {
+			loadTimeline();
+		}
 	},
 	{ immediate: true },
 );

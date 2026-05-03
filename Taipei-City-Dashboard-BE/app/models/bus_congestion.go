@@ -7,7 +7,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// BusCongestionSegment is a row in bus_congestion_segments (dashboard DB)
+// BusCongestionSegment is a row in bus_congestion_segments (dashboard DB).
+// route_id / route_uid / route_name / sub_route_* columns are populated only
+// by the demo dump (test-update-bus/bus_congestion_dump.sql); the live BE
+// pipeline leaves them NULL.
 type BusCongestionSegment struct {
 	ID        int       `gorm:"column:id;primaryKey;autoIncrement"`
 	SegID     string    `gorm:"column:seg_id;not null"`
@@ -20,7 +23,6 @@ type BusCongestionSegment struct {
 	Label     string    `gorm:"column:label"`
 	HasDelta  bool      `gorm:"column:has_delta;default:false"`
 	NSamples  int       `gorm:"column:n_samples;default:0"`
-	GeoJSON   string    `gorm:"column:geojson"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
@@ -29,9 +31,10 @@ func (BusCongestionSegment) TableName() string {
 	return "bus_congestion_segments"
 }
 
-// UpsertBusCongestionSegments truncates and re-inserts all segments
+// UpsertBusCongestionSegments truncates and re-inserts all segments.
+// fc is the bus_congestion service's GeoJSONCollection — passed as interface{}
+// to avoid an import cycle.
 func UpsertBusCongestionSegments(fc interface{}) error {
-	// fc is a GeoJSONCollection — use raw JSON marshaling to avoid import cycle
 	data, err := json.Marshal(fc)
 	if err != nil {
 		return err
@@ -57,30 +60,30 @@ func UpsertBusCongestionSegments(fc interface{}) error {
 		return err
 	}
 
+	segs := make([]BusCongestionSegment, 0, len(geojson.Features))
+	for _, f := range geojson.Features {
+		p := f.Properties
+		segs = append(segs, BusCongestionSegment{
+			SegID:     p.SegID,
+			FromName:  p.FromName,
+			ToName:    p.ToName,
+			Direction: p.Direction,
+			City:      p.City,
+			SegErr:    p.SegErr,
+			Color:     p.Color,
+			Label:     p.Label,
+			HasDelta:  p.HasDelta,
+			NSamples:  p.NSamples,
+		})
+	}
+
 	return DBDashboard.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("TRUNCATE bus_congestion_segments").Error; err != nil {
 			return err
 		}
-		for i, f := range geojson.Features {
-			p := f.Properties
-			featJSON, _ := json.Marshal(geojson.Features[i])
-			seg := BusCongestionSegment{
-				SegID:     p.SegID,
-				FromName:  p.FromName,
-				ToName:    p.ToName,
-				Direction: p.Direction,
-				City:      p.City,
-				SegErr:    p.SegErr,
-				Color:     p.Color,
-				Label:     p.Label,
-				HasDelta:  p.HasDelta,
-				NSamples:  p.NSamples,
-				GeoJSON:   string(featJSON),
-			}
-			if err := tx.Create(&seg).Error; err != nil {
-				return err
-			}
+		if len(segs) == 0 {
+			return nil
 		}
-		return nil
+		return tx.CreateInBatches(segs, 1000).Error
 	})
 }
