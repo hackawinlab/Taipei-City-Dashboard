@@ -98,6 +98,45 @@ export const useMapStore = defineStore("map", {
 		},
 	}),
 	actions: {
+		isBusCongestionMap(map_config) {
+			return map_config?.index?.startsWith("bus_congestion_");
+		},
+		isBusRouteShapeMap(map_config) {
+			return map_config?.index === "bus_route_shapes";
+		},
+		getBusCongestionCityFilter(map_config) {
+			if (
+				!this.isBusCongestionMap(map_config) &&
+				!this.isBusRouteShapeMap(map_config)
+			) {
+				return null;
+			}
+
+			const cityProperty = ["coalesce", ["get", "city"], ["get", "route"]];
+			if (map_config.city === "taipei") {
+				return ["==", cityProperty, "台北市"];
+			}
+			if (map_config.city === "metrotaipei") {
+				return [
+					"match",
+					cityProperty,
+					["台北市", "新北市"],
+					true,
+					false,
+				];
+			}
+			return null;
+		},
+		getBusRouteShapeIdleFilter(map_config) {
+			if (!this.isBusRouteShapeMap(map_config)) return null;
+			return ["==", ["get", "route_name"], "__no_route_selected__"];
+		},
+		combineMapFilters(...filters) {
+			const validFilters = filters.filter(Boolean);
+			if (validFilters.length === 0) return null;
+			if (validFilters.length === 1) return validFilters[0];
+			return ["all", ...validFilters];
+		},
 		/* Initialize Mapbox */
 		// 1. Creates the mapbox instance and passes in initial configs
 		initializeMapBox() {
@@ -705,6 +744,14 @@ export const useMapStore = defineStore("map", {
 					"wee_hazard_water_tp-fill-extrusion-taipei"
 			) {
 				config.filter = initialFilter;
+			}
+			const combinedFilter = this.combineMapFilters(
+				config.filter,
+				this.getBusCongestionCityFilter(map_config),
+				this.getBusRouteShapeIdleFilter(map_config),
+			);
+			if (combinedFilter) {
+				config.filter = combinedFilter;
 			}
 			this.map.addLayer(config);
 			if (
@@ -2432,6 +2479,7 @@ export const useMapStore = defineStore("map", {
 					this.renderDeckGLLayer();
 					return;
 				}
+				let paramFilter = null;
 				// If x and y both exist, filter by both
 				if (
 					map_filter.byParam.xParam &&
@@ -2439,27 +2487,36 @@ export const useMapStore = defineStore("map", {
 					xParam &&
 					yParam
 				) {
-					this.map.setFilter(mapLayerId, [
+					paramFilter = [
 						"all",
 						["==", ["get", map_filter.byParam.xParam], xParam],
 						["==", ["get", map_filter.byParam.yParam], yParam],
-					]);
+					];
 				}
 				// If only y exists, filter by y
 				else if (map_filter.byParam.yParam && yParam) {
-					this.map.setFilter(mapLayerId, [
+					paramFilter = [
 						"==",
 						["get", map_filter.byParam.yParam],
 						yParam,
-					]);
+					];
 				}
 				// default to filter by x
 				else if (map_filter.byParam.xParam && xParam) {
-					this.map.setFilter(mapLayerId, [
+					paramFilter = [
 						"==",
 						["get", map_filter.byParam.xParam],
 						xParam,
-					]);
+					];
+				}
+				if (paramFilter) {
+					this.map.setFilter(
+						mapLayerId,
+						this.combineMapFilters(
+							this.getBusCongestionCityFilter(map_config),
+							paramFilter,
+						),
+					);
 				}
 			});
 		},
@@ -2502,7 +2559,13 @@ export const useMapStore = defineStore("map", {
 					this.renderDeckGLLayer();
 					return;
 				}
-				this.map.setFilter(mapLayerId, null);
+				this.map.setFilter(
+					mapLayerId,
+					this.combineMapFilters(
+						this.getBusCongestionCityFilter(map_config),
+						this.getBusRouteShapeIdleFilter(map_config),
+					),
+				);
 			});
 		},
 		// 4. Remove any layer filters on a map layer.

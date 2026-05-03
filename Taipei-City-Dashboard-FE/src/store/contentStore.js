@@ -16,6 +16,10 @@ import { useDialogStore } from "./dialogStore";
 import { useAuthStore } from "./authStore";
 import { getComponentDataTimeframe } from "../assets/utilityFunctions/dataTimeframe";
 import { CityManager } from "../dashboardComponent/utilities/cityManager";
+import {
+	buildBusCongestionTimelineBlock,
+	shouldInjectBusTimeline,
+} from "./busCongestionTimeline";
 
 export const useContentStore = defineStore("content", {
 	state: () => ({
@@ -281,6 +285,17 @@ export const useContentStore = defineStore("content", {
 					`/dashboard/${this.currentDashboard.index}`,
 				);
 				this.cityDashboard.components = response.data.data || [];
+				// 公車壅塞時序與既有「公車 ETA 壅塞偵測」同源,並排注入。
+				// 用 component 判斷 (而非 dashboard index 名稱),因為 manager DB
+				// 同一個 smart_commute_taipei 可能掛在 台北 / 雙北 任一 group。
+				if (
+					shouldInjectBusTimeline(this.cityDashboard.components) &&
+					this.currentDashboard.city
+				) {
+					this.cityDashboard.components.push(
+						buildBusCongestionTimelineBlock(this.currentDashboard.city),
+					);
+				}
 				this.filterCurrentDashboardContent();
 			} catch (error) {
 				console.error("Error getting dashboard index data:", error);
@@ -300,6 +315,11 @@ export const useContentStore = defineStore("content", {
 					index++
 				) {
 					const component = this.cityDashboard.components[index];
+					// 4-1a. FE-injected virtual components 自己 fetch BE,
+					// 別打 /component/{id}/chart 製造 404 雜訊。
+					if (component?._virtual) {
+						continue;
+					}
 					try {
 						// 4-2. Get chart data — components with chart_config.api_endpoint
 						// (mirror of component_maps.api_endpoint) take priority over the
@@ -415,6 +435,9 @@ export const useContentStore = defineStore("content", {
 					index++
 				) {
 					const component = this.cityDashboard.components[index];
+					if (component?._virtual) {
+						continue;
+					}
 					if (
 						this.metroKeys.some((key) =>
 							component.index.includes(key),

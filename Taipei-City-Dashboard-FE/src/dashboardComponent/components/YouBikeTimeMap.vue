@@ -217,7 +217,7 @@ function makeRingPolygon(center, radiusMeters, points = 96) {
 }
 
 function clearAIHighlight() {
-	const map = mapStore.map;
+	const {map} = mapStore;
 	if (!map) return;
 	for (const id of [
 		HIGHLIGHT_FILL_LAYER,
@@ -232,7 +232,7 @@ function clearAIHighlight() {
 }
 
 function drawAIHighlight(center, radiusMeters, verdict) {
-	const map = mapStore.map;
+	const {map} = mapStore;
 	if (!map || !Array.isArray(center) || !radiusMeters) return;
 	clearAIHighlight();
 	const color = VERDICT_COLOR[verdict] || "#ffd479";

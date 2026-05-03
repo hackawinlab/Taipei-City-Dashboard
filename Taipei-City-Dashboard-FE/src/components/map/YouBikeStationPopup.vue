@@ -202,31 +202,31 @@ onMounted(async () => {
 </script>
 
 <template>
-	<div class="youbike-station-popup">
-		<div class="youbike-station-popup-header">
-			<span class="station-name">{{ stationName || "YouBike 站點" }}</span>
-		</div>
-		<div
-			v-if="loading"
-			class="youbike-station-popup-status"
-		>
-			載入中…
-		</div>
-		<div
-			v-else-if="error"
-			class="youbike-station-popup-status error"
-		>
-			{{ error }}
-		</div>
-		<VueApexCharts
-			v-else
-			type="bar"
-			height="200"
-			width="100%"
-			:options="chartOptions"
-			:series="series"
-		/>
-	</div>
+  <div class="youbike-station-popup">
+    <div class="youbike-station-popup-header">
+      <span class="station-name">{{ stationName || "YouBike 站點" }}</span>
+    </div>
+    <div
+      v-if="loading"
+      class="youbike-station-popup-status"
+    >
+      載入中…
+    </div>
+    <div
+      v-else-if="error"
+      class="youbike-station-popup-status error"
+    >
+      {{ error }}
+    </div>
+    <VueApexCharts
+      v-else
+      type="bar"
+      height="200"
+      width="100%"
+      :options="chartOptions"
+      :series="series"
+    />
+  </div>
 </template>
 
 <style scoped lang="scss">

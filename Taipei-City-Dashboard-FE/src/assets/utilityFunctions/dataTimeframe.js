@@ -77,10 +77,15 @@ export function getComponentDataTimeframe(time_from, time_to, api) {
 			.replace("T", " ");
 	}
 	if (api === true) {
-		return {
-			timefrom: parsedTimeFrom.replace(" ", "T") + "+08:00",
-			timeto: parsedTimeTo.replace(" ", "T") + "+08:00",
-		};
+		// Only attach the +08:00 suffix when the corresponding time was
+		// actually parsed; otherwise omit the param entirely so the backend
+		// applies its own default. Without this guard, callers whose
+		// `time_to !== "now"` end up sending `timeto=+08:00` which the BE
+		// rejects with `timeto 格式無效`.
+		const out = {};
+		if (parsedTimeFrom) out.timefrom = parsedTimeFrom.replace(" ", "T") + "+08:00";
+		if (parsedTimeTo) out.timeto = parsedTimeTo.replace(" ", "T") + "+08:00";
+		return out;
 	} else {
 		return { parsedTimeFrom, parsedTimeTo };
 	}

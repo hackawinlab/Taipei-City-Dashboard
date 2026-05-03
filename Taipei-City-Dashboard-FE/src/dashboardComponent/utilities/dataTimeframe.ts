@@ -81,10 +81,14 @@ export function getComponentDataTimeframe(
 			.replace("T", " ");
 	}
 	if (api === true) {
-		return {
-			timefrom: parsedTimeFrom.replace(" ", "T") + "+08:00",
-			timeto: parsedTimeTo.replace(" ", "T") + "+08:00",
-		};
+		// Only attach the +08:00 suffix when the corresponding time was
+		// actually parsed; otherwise BE gets `timeto=+08:00` and rejects it.
+		// Cast to the declared return shape since TS doesn't know about the
+		// conditional inclusion.
+		const out: { timefrom?: string; timeto?: string } = {};
+		if (parsedTimeFrom) out.timefrom = parsedTimeFrom.replace(" ", "T") + "+08:00";
+		if (parsedTimeTo) out.timeto = parsedTimeTo.replace(" ", "T") + "+08:00";
+		return out as { timefrom: string; timeto: string };
 	} else {
 		return { timefrom: parsedTimeFrom, timeto: parsedTimeTo };
 	}

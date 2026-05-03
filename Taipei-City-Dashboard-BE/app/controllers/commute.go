@@ -457,6 +457,134 @@ LIMIT $2`
 	c.JSON(http.StatusOK, gin.H{"data": data})
 }
 
+// Bus congestion timeline — DB-backed timeseries from
+// public.bus_congestion_history_segments (dashboard DB). Powers the
+// "公車壅塞時序" virtual dashboard.
+
+func busCongestionValidateCity(city string) bool {
+	return city == "taipei" || city == "metrotaipei"
+}
+
+// busCongestionLabelOrder fixes the chart series order from least to most
+// severe so colours stay stable across renders. "無資料" is intentionally
+// omitted — it dominates the matview (~75% of rows) and the model layer
+// already filters it out.
+var busCongestionLabelOrder = []string{"暢通", "輕微", "中度", "嚴重", "極嚴重"}
+
+// GetBusCongestionRoutes handles GET /api/v1/commute/bus-congestion/routes
+// Query params: city (taipei|metrotaipei, default taipei).
+//
+// Returns the full list of route_name values from bus_congestion_segments
+// for the requested scope (taipei → 台北市; metrotaipei → 台北市+新北市).
+// Routes without edge history will still show up here so users can pick
+// them; the timeline endpoint communicates the data gap via data_note.
+func GetBusCongestionRoutes(c *gin.Context) {
+	city := c.DefaultQuery("city", "taipei")
+	if !busCongestionValidateCity(city) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid city: must be taipei or metrotaipei"})
+		return
+	}
+
+	routes, err := models.ListBusCongestionRoutes(city)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": routes,
+		"city": city,
+	})
+}
+
+// GetBusCongestionTimeline handles GET /api/v1/commute/bus-congestion/timeline
+// Query params:
+//
+//	city       (taipei|metrotaipei, default taipei)
+//	route_name (optional; empty = aggregate across whole city)
+//
+// Returns ApexCharts-compatible categories (snapshot times in HH:MM Taipei)
+// and stacked series (one per congestion label).
+func GetBusCongestionTimeline(c *gin.Context) {
+	city := c.DefaultQuery("city", "taipei")
+	if !busCongestionValidateCity(city) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid city: must be taipei or metrotaipei"})
+		return
+	}
+	routeName := c.Query("route_name")
+
+	points, err := models.GetBusCongestionTimeline(city, routeName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("query error: %v", err)})
+		return
+	}
+
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		loc = time.UTC
+	}
+
+	// Index unique snapshots in chronological order. Using a slice + map
+	// keeps ordering deterministic and lets us back-fill 0 for (snapshot,label)
+	// pairs that simply have no rows in that bucket.
+	type snapshotKey struct{ t time.Time }
+	snapshotIdx := map[time.Time]int{}
+	categories := []string{}
+	for _, p := range points {
+		if _, ok := snapshotIdx[p.SnapshotTime]; ok {
+			continue
+		}
+		snapshotIdx[p.SnapshotTime] = len(categories)
+		categories = append(categories, p.SnapshotTime.In(loc).Format("15:04"))
+	}
+
+	// Build series per known label, zero-filled.
+	type seriesEntry struct {
+		Name string  `json:"name"`
+		Data []int64 `json:"data"`
+	}
+	seriesByLabel := map[string]*seriesEntry{}
+	for _, name := range busCongestionLabelOrder {
+		seriesByLabel[name] = &seriesEntry{Name: name, Data: make([]int64, len(categories))}
+	}
+	for _, p := range points {
+		entry, ok := seriesByLabel[p.Label]
+		if !ok {
+			// Unknown label — skip. (Would be rare; matview labels are stable.)
+			continue
+		}
+		idx := snapshotIdx[p.SnapshotTime]
+		entry.Data[idx] = p.SegmentCount
+	}
+
+	series := make([]seriesEntry, 0, len(busCongestionLabelOrder))
+	for _, name := range busCongestionLabelOrder {
+		series = append(series, *seriesByLabel[name])
+	}
+
+	// Surface the data gap when the matview has no rows for the requested
+	// route. The dropdown source (bus_congestion_segments) is broader than
+	// the matview (history_segments) by design, so users can pick a 新北
+	// route like "275" and end up here with zero rows. Tell them why.
+	dataNote := ""
+	if len(categories) == 0 {
+		if routeName != "" {
+			dataNote = "此路線目前無邊段歷史資料(matview 僅含台北市 edge)"
+		} else {
+			dataNote = "此 city 目前無邊段歷史資料"
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"city":           city,
+		"route_name":     routeName,
+		"snapshot_count": len(categories),
+		"categories":     categories,
+		"series":         series,
+		"data_note":      dataNote,
+	})
+}
+
 // Shortage aggregate cache — built from the same youbike_snapshots table that
 // powers the timemap, then cached in-process for shortageCacheTTL because the
 // aggregation reads ~130k rows and is identical for every caller. Shared by
