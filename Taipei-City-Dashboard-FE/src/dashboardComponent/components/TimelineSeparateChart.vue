@@ -109,6 +109,26 @@ watch(
 		localSeries.value = JSON.parse(JSON.stringify(newVal || []));
 
 		const timestamps = newVal?.[0]?.data?.map((p) => new Date(p.x).getTime()) || [];
+
+		// If any x doesn't parse as a real date (e.g. categorical labels like "0"..."23"
+		// for an hour-of-day distribution), switch to a category axis driven by
+		// chart_config.categories (falling back to the raw x values).
+		if (timestamps.some((t) => Number.isNaN(t))) {
+			const categories =
+				props.chart_config?.categories ||
+				newVal?.[0]?.data?.map((p) => p.x) ||
+				[];
+			chartOptions.value = {
+				...chartOptions.value,
+				xaxis: {
+					...chartOptions.value.xaxis,
+					type: "category",
+					categories,
+				},
+			};
+			return;
+		}
+
 		if (timestamps.length < 2) return;
 
 		const newDiff = Math.max(...timestamps) - Math.min(...timestamps);

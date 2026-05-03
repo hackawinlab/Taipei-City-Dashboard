@@ -282,6 +282,15 @@ ORDER BY slot, snapshot_at DESC`
 // Query params: city (Taipei|NewTaipei|all, default all)
 func GetYouBikeShortage(c *gin.Context) {
 	city := c.DefaultQuery("city", "all")
+	// normalize dashboard-style city values onto the Taipei|NewTaipei|all
+	// vocabulary the raw SQL below expects. (cf. resolveYouBikeAggregateCity
+	// which returns "All" for the aggregate-payload key path.)
+	switch city {
+	case "taipei":
+		city = "Taipei"
+	case "metrotaipei":
+		city = "all"
+	}
 	if !youbikeValidateCity(city) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid city: must be Taipei, NewTaipei, or all"})
 		return
@@ -300,7 +309,7 @@ SELECT EXTRACT(HOUR FROM snapshot_at AT TIME ZONE 'Asia/Taipei')::int AS hour,
 FROM youbike_snapshots
 WHERE (city = $1 OR $1 = 'all')
 GROUP BY 1, 2
-ORDER BY 1, 2`
+ORDER BY 1, CASE city WHEN 'Taipei' THEN 1 ELSE 2 END`
 
 	sqlDB, err := models.DBHackathon.DB()
 	if err != nil {
@@ -315,11 +324,7 @@ ORDER BY 1, 2`
 	}
 	defer rows.Close()
 
-	// Collect data grouped by city into a map[city][hour] → shortage_pct
-	type hourPoint struct {
-		X string  `json:"x"`
-		Y float64 `json:"y"`
-	}
+	// Collect data grouped by city into a map[city][hour] → shortage_pct.
 	// cityHours holds the computed shortage_pct for each (city, hour) pair seen in DB results.
 	cityHours := make(map[string]map[int]float64)
 	cityOrder := []string{}
@@ -352,21 +357,17 @@ ORDER BY 1, 2`
 		return
 	}
 
-	type seriesEntry struct {
-		Name string      `json:"name"`
-		Data []hourPoint `json:"data"`
-	}
-	series := []seriesEntry{}
+	series := []chartTwoDimSeries{}
 	for _, name := range cityOrder {
-		data := make([]hourPoint, 24)
+		data := make([]chartTwoDimPoint, 24)
 		for h := 0; h < 24; h++ {
 			pct := 0.0
 			if v, ok := cityHours[name][h]; ok {
 				pct = v
 			}
-			data[h] = hourPoint{X: strconv.Itoa(h), Y: pct}
+			data[h] = chartTwoDimPoint{X: strconv.Itoa(h), Y: pct}
 		}
-		series = append(series, seriesEntry{Name: name, Data: data})
+		series = append(series, chartTwoDimSeries{Name: name, Data: data})
 	}
 
 	categories := make([]string, 24)
@@ -374,9 +375,10 @@ ORDER BY 1, 2`
 		categories[i] = strconv.Itoa(i)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"series":     series,
-		"categories": categories,
+	c.JSON(http.StatusOK, chartTwoDimResponse{
+		Status:     "success",
+		Data:       series,
+		Categories: categories,
 	})
 }
 

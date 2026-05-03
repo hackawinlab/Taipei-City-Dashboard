@@ -4,7 +4,7 @@
 #
 # Bootstraps everything needed for the YouBike time-series feature:
 #   1. Creates the hackathon DB (if missing).
-#   2. Seeds dashboardmanager: timemap + shortage blocks (persistence/imbalance) + "Youbike Analysis" dashboard.
+#   2. Seeds dashboardmanager: timemap + shortage blocks (persistence/imbalance) + shortage timeline + "Youbike Analysis" dashboard.
 #   3. Initializes the youbike_snapshots schema and indexes.
 #   4. Loads real CSV snapshots from ${DATA_DIR}/youbike_{Taipei,NewTaipei}/*.csv.
 #   5. Fills missing 15-min slots so the time slider has data at every quarter.
@@ -58,10 +58,11 @@ else
 fi
 
 # ---------- 2. Seed dashboardmanager (component + dashboard) ----------
-echo "==> [2/5] Seeding ${MANAGER_DB} (timemap + shortage blocks + Youbike Analysis dashboard)"
+echo "==> [2/5] Seeding ${MANAGER_DB} (timemap + shortage blocks + shortage timeline + Youbike Analysis dashboard)"
 psql_db "${MANAGER_DB}" -q < "${REPO_ROOT}/db-sample-data/youbike-timemap-seed.sql"
 psql_db "${MANAGER_DB}" -q < "${REPO_ROOT}/db-sample-data/youbike-analysis-dashboard.sql"
 psql_db "${MANAGER_DB}" -q < "${REPO_ROOT}/db-sample-data/youbike-shortage-blocks-seed.sql"
+psql_db "${MANAGER_DB}" -q < "${REPO_ROOT}/db-sample-data/youbike-shortage-timeline-seed.sql"
 
 # ---------- 3. Initialize hackathon schema ----------
 echo "==> [3/5] Initializing ${HACKATHON_DB} schema (table + indexes)"
