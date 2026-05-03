@@ -3,7 +3,6 @@ package bus_congestion
 import "time"
 
 const (
-	pollInterval  = 90 * time.Second
 	ewmaAlpha     = 0.35
 	swapDropS     = 135
 	swapRiseRatio = 0.5

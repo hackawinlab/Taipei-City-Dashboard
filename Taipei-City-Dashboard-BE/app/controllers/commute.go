@@ -524,10 +524,9 @@ func GetBusCongestionTimeline(c *gin.Context) {
 		loc = time.UTC
 	}
 
-	// Index unique snapshots in chronological order. Using a slice + map
-	// keeps ordering deterministic and lets us back-fill 0 for (snapshot,label)
-	// pairs that simply have no rows in that bucket.
-	type snapshotKey struct{ t time.Time }
+	// Index unique snapshots in chronological order. Slice + map lets us
+	// back-fill 0 for (snapshot,label) pairs missing from a bucket while
+	// keeping ordering deterministic.
 	snapshotIdx := map[time.Time]int{}
 	categories := []string{}
 	for _, p := range points {

@@ -6,7 +6,16 @@
 -- query_charts / component_maps 出廠 schema 沒有 (index,city) / (index) 的 unique 約束,
 -- 若沒有這兩個索引,下面的 ON CONFLICT 子句會以
 -- "no unique or exclusion constraint matching the ON CONFLICT specification" 失敗。
--- 已驗證資料無重複,可直接建立。
+--
+-- 先去除 bus_congestion_{abs,delta} 的歷史重複（unique index 引入前 ON CONFLICT
+-- DO NOTHING 沒有 constraint 可參考時根本不去重，重跑這個 seed 會累積重複行）；
+-- 留 id 最小的一筆。對乾淨 DB 是 no-op。
+DELETE FROM public.component_maps a
+USING public.component_maps b
+WHERE a.index IN ('bus_congestion_abs', 'bus_congestion_delta')
+  AND a.index = b.index
+  AND a.id > b.id;
+
 CREATE UNIQUE INDEX IF NOT EXISTS component_maps_index_uniq
   ON public.component_maps (index);
 CREATE UNIQUE INDEX IF NOT EXISTS query_charts_index_city_uniq
@@ -49,7 +58,10 @@ VALUES (
 ON CONFLICT (index) DO NOTHING;
 
 -- 3. query_charts 設定（總覽壅塞路段數 + 關聯圖層）
--- 注意：若 bus_congestion_layer 已存在，只更新 map_config_ids
+-- ON CONFLICT (index, city) 依賴 §0 建立的 unique index。
+-- time_from = 'static' 必填：FE DashboardComponent.dataTime 對非
+-- 'static'/'current'/'demo'/'maintain' 的 time_from 會丟給
+-- getComponentDataTimeframe，並在 time_to 為 NULL 時讀 undefined.slice 而 throw。
 DO $$
 DECLARE
   abs_id   INTEGER;
@@ -119,23 +131,23 @@ BEGIN
   SELECT id INTO abs_id   FROM public.component_maps WHERE index = 'bus_congestion_abs'   LIMIT 1;
   SELECT id INTO delta_id FROM public.component_maps WHERE index = 'bus_congestion_delta' LIMIT 1;
 
-  -- taipei 和 metrotaipei 各一筆，ON CONFLICT 更新 map_config_ids
   INSERT INTO public.query_charts
-    (index, city, query_type, query_chart, map_config_ids, created_at, updated_at)
+    (index, city, query_type, query_chart, map_config_ids, time_from, created_at, updated_at)
   VALUES
     (
       'bus_congestion_layer', 'taipei', 'map_legend',
       taipei_query,
-      ARRAY[abs_id, delta_id], comp_created_at, comp_created_at
+      ARRAY[abs_id, delta_id], 'static', comp_created_at, comp_created_at
     ),
     (
       'bus_congestion_layer', 'metrotaipei', 'map_legend',
       metrotaipei_query,
-      ARRAY[abs_id, delta_id], comp_created_at, comp_created_at
+      ARRAY[abs_id, delta_id], 'static', comp_created_at, comp_created_at
     )
   ON CONFLICT (index, city) DO UPDATE
     SET query_chart    = EXCLUDED.query_chart,
         map_config_ids = EXCLUDED.map_config_ids,
+        time_from      = EXCLUDED.time_from,
         updated_at     = now();
 END $$;
 

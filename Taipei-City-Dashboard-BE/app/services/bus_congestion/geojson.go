@@ -22,18 +22,22 @@ func errorToColor(errSecs float64) string {
 	}
 }
 
+// errorToLabel returns the bare congestion label so values written back to
+// bus_congestion_segments.label match the dump format and the controller's
+// busCongestionLabelOrder. The legend wording with second ranges lives in
+// the manager DB query_charts row instead.
 func errorToLabel(errSecs float64) string {
 	switch {
 	case errSecs <= 0:
-		return "暢通(≤0s)"
+		return "暢通"
 	case errSecs <= 30:
-		return "輕微(+1~30s)"
+		return "輕微"
 	case errSecs <= 60:
-		return "中度(+31~60s)"
+		return "中度"
 	case errSecs <= 120:
-		return "嚴重(+61~120s)"
+		return "嚴重"
 	default:
-		return "極嚴重(>120s)"
+		return "極嚴重"
 	}
 }
 
