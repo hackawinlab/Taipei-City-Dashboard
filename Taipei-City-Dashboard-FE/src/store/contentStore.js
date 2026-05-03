@@ -23,10 +23,9 @@ import {
 	loadYoubikeShortageComponents,
 } from "./youbikeShortageBlocks";
 import {
-	BUS_CONGESTION_DASHBOARDS,
-	isBusCongestionTimelineIndex,
-	getBusCongestionTimelineDashboard,
-	loadBusCongestionTimelineComponents,
+	buildBusCongestionTimelineBlock,
+	shouldInjectBusTimeline,
+	BUS_CONGESTION_TIMELINE_INDEX,
 } from "./busCongestionTimeline";
 
 export const useContentStore = defineStore("content", {
@@ -108,17 +107,6 @@ export const useContentStore = defineStore("content", {
 				this.dashboards.set(d.city, list);
 			});
 		},
-		// Inject 公車壅塞時序 virtual dashboard. Same idempotent pattern as YouBike.
-		injectBusCongestionTimelineDashboard() {
-			BUS_CONGESTION_DASHBOARDS.forEach((d) => {
-				const list = this.dashboards.get(d.city) ?? [];
-				if (list.find((item) => item.index === d.index)) {
-					return;
-				}
-				list.unshift({ index: d.index, name: d.name, icon: d.icon });
-				this.dashboards.set(d.city, list);
-			});
-		},
 		// Load a YouBike 缺車分析 dashboard from local JSON (skip BE)
 		async loadYoubikeShortageDashboard(index) {
 			const dashboard = getYoubikeShortageDashboard(index);
@@ -135,30 +123,6 @@ export const useContentStore = defineStore("content", {
 				this.filterCurrentDashboardContent();
 			} catch (error) {
 				console.error("Failed to load YouBike shortage dashboard:", error);
-				this.cityDashboard.components = [];
-				this.currentDashboard.components = [];
-				this.currentDashboardExcluded.components = [];
-				this.error = true;
-			}
-			this.loading = false;
-		},
-		// Load 公車壅塞時序 virtual dashboard. The BusCongestionTimeline component
-		// fetches /commute/bus-congestion/* itself, so this just builds shells.
-		async loadBusCongestionTimelineDashboard(index) {
-			const dashboard = getBusCongestionTimelineDashboard(index);
-			if (!dashboard) {
-				this.error = true;
-				this.loading = false;
-				return;
-			}
-			this.currentDashboard.name = dashboard.name;
-			this.currentDashboard.icon = dashboard.icon;
-			try {
-				const components = await loadBusCongestionTimelineComponents(index);
-				this.cityDashboard.components = components;
-				this.filterCurrentDashboardContent();
-			} catch (error) {
-				console.error("Failed to load bus congestion timeline dashboard:", error);
 				this.cityDashboard.components = [];
 				this.currentDashboard.components = [];
 				this.currentDashboardExcluded.components = [];
@@ -242,7 +206,6 @@ export const useContentStore = defineStore("content", {
 
 			// Inject local YouBike 缺車分析 dashboard into 雙北 list
 			this.injectYoubikeShortageDashboard();
-			this.injectBusCongestionTimelineDashboard();
 
 			if (onlyDashboard) return;
 
@@ -307,10 +270,6 @@ export const useContentStore = defineStore("content", {
 				await this.loadYoubikeShortageDashboard(this.currentDashboard.index);
 				return;
 			}
-			if (isBusCongestionTimelineIndex(this.currentDashboard.index)) {
-				await this.loadBusCongestionTimelineDashboard(this.currentDashboard.index);
-				return;
-			}
 
 			const currentCityDashboards = this.currentDashboard.city
 				? this.getDashboardsByCity(this.currentDashboard.city)
@@ -355,6 +314,17 @@ export const useContentStore = defineStore("content", {
 					`/dashboard/${this.currentDashboard.index}`,
 				);
 				this.cityDashboard.components = response.data.data || [];
+				// 公車壅塞時序與既有「公車 ETA 壅塞偵測」同源,並排注入。
+				// 用 component 判斷 (而非 dashboard index 名稱),因為 manager DB
+				// 同一個 smart_commute_taipei 可能掛在 台北 / 雙北 任一 group。
+				if (
+					shouldInjectBusTimeline(this.cityDashboard.components) &&
+					this.currentDashboard.city
+				) {
+					this.cityDashboard.components.push(
+						buildBusCongestionTimelineBlock(this.currentDashboard.city),
+					);
+				}
 				this.filterCurrentDashboardContent();
 			} catch (error) {
 				console.error("Error getting dashboard index data:", error);
@@ -374,6 +344,11 @@ export const useContentStore = defineStore("content", {
 					index++
 				) {
 					const component = this.cityDashboard.components[index];
+					// 4-1a. FE-injected virtual components 自己 fetch BE,
+					// 別打 /component/{id}/chart 製造 404 雜訊。
+					if (component?._virtual) {
+						continue;
+					}
 					try {
 						// 4-2. Get chart data
 						const response = await http.get(
@@ -481,6 +456,9 @@ export const useContentStore = defineStore("content", {
 					index++
 				) {
 					const component = this.cityDashboard.components[index];
+					if (component?._virtual) {
+						continue;
+					}
 					if (
 						this.metroKeys.some((key) =>
 							component.index.includes(key),

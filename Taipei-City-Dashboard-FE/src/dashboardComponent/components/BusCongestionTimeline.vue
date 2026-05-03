@@ -1,7 +1,13 @@
 <!-- BusCongestionTimeline — DB-backed stacked-column timeseries of
      公車壅塞分布。Mirrors the YouBikeTimeMap pattern: a custom chart
      component that owns its own state and fetches from /commute/...,
-     so we don't need to round-trip through manager DB query_charts. -->
+     so we don't need to round-trip through manager DB query_charts.
+
+     The component owns a local 台北 / 雙北 toggle: sidebar entry sets
+     the initial scope, but users can switch in-place without navigating
+     dashboards. BE returns a `data_note` whenever the matview has no
+     rows for the selected route (e.g. 新北 routes like 275 — they show
+     up in the dropdown but have no edge history yet). -->
 
 <script setup>
 import { computed, ref, watch } from "vue";
@@ -18,15 +24,13 @@ const props = defineProps([
 	"map_filter_on",
 ]);
 
-// metrotaipei intentionally falls back to taipei in BE (matview only has 台北市
-// edge history). Surface this in the dropdown UX so users aren't surprised.
-const cityParam = computed(() => (props.activeCity === "metrotaipei" ? "metrotaipei" : "taipei"));
-const showMetroNote = computed(() => props.activeCity === "metrotaipei");
+const cityScope = ref(props.activeCity === "metrotaipei" ? "metrotaipei" : "taipei");
 
 const routes = ref([]);
 const selectedRoute = ref("");
 const categories = ref([]);
 const series = ref([]);
+const dataNote = ref("");
 const loading = ref(false);
 const errMsg = ref("");
 
@@ -72,7 +76,7 @@ const chartOptions = computed(() => ({
 async function loadRoutes() {
 	try {
 		const res = await http.get("/commute/bus-congestion/routes", {
-			params: { city: cityParam.value },
+			params: { city: cityScope.value },
 		});
 		routes.value = res.data.data || [];
 	} catch (e) {
@@ -85,21 +89,23 @@ async function loadTimeline() {
 	errMsg.value = "";
 	try {
 		const res = await http.get("/commute/bus-congestion/timeline", {
-			params: { city: cityParam.value, route_name: selectedRoute.value },
+			params: { city: cityScope.value, route_name: selectedRoute.value },
 		});
 		categories.value = res.data.categories || [];
 		series.value = res.data.series || [];
+		dataNote.value = res.data.data_note || "";
 	} catch (e) {
 		errMsg.value = "載入失敗";
 		categories.value = [];
 		series.value = [];
+		dataNote.value = "";
 	} finally {
 		loading.value = false;
 	}
 }
 
 watch(
-	cityParam,
+	cityScope,
 	() => {
 		selectedRoute.value = "";
 		loadRoutes();
@@ -114,27 +120,70 @@ watch(selectedRoute, () => {
 </script>
 
 <template>
-	<div class="bus-timeline">
-		<div class="bus-timeline-header">
-			<select v-model="selectedRoute" class="bus-timeline-route">
-				<option value="">全市</option>
-				<option v-for="r in routes" :key="r" :value="r">{{ r }}</option>
-			</select>
-			<span v-if="showMetroNote" class="bus-timeline-note">
-				※ 目前歷史 matview 僅含臺北市,顯示資料為臺北市
-			</span>
-		</div>
-		<div v-if="loading" class="bus-timeline-status">載入中…</div>
-		<div v-else-if="errMsg" class="bus-timeline-status err">{{ errMsg }}</div>
-		<div v-else-if="!categories.length" class="bus-timeline-status">無資料</div>
-		<VueApexCharts
-			v-else
-			type="bar"
-			height="100%"
-			:options="chartOptions"
-			:series="series"
-		/>
-	</div>
+  <div class="bus-timeline">
+    <div class="bus-timeline-header">
+      <div
+        class="bus-timeline-city"
+        role="group"
+        aria-label="城市範圍"
+      >
+        <button
+          type="button"
+          :class="{ active: cityScope === 'taipei' }"
+          @click="cityScope = 'taipei'"
+        >
+          台北
+        </button>
+        <button
+          type="button"
+          :class="{ active: cityScope === 'metrotaipei' }"
+          @click="cityScope = 'metrotaipei'"
+        >
+          雙北
+        </button>
+      </div>
+      <select
+        v-model="selectedRoute"
+        class="bus-timeline-route"
+      >
+        <option value="">
+          全市
+        </option>
+        <option
+          v-for="r in routes"
+          :key="r"
+          :value="r"
+        >
+          {{ r }}
+        </option>
+      </select>
+    </div>
+    <div
+      v-if="loading"
+      class="bus-timeline-status"
+    >
+      載入中…
+    </div>
+    <div
+      v-else-if="errMsg"
+      class="bus-timeline-status err"
+    >
+      {{ errMsg }}
+    </div>
+    <div
+      v-else-if="!categories.length"
+      class="bus-timeline-status"
+    >
+      {{ dataNote || "無資料" }}
+    </div>
+    <VueApexCharts
+      v-else
+      type="bar"
+      height="100%"
+      :options="chartOptions"
+      :series="series"
+    />
+  </div>
 </template>
 
 <style scoped lang="scss">
@@ -152,6 +201,37 @@ watch(selectedRoute, () => {
 	padding-bottom: 0.5rem;
 }
 
+.bus-timeline-city {
+	display: inline-flex;
+	border: 1px solid var(--color-border, #383a3c);
+	border-radius: 4px;
+	overflow: hidden;
+
+	button {
+		background: transparent;
+		color: var(--color-secondary-text, #80868b);
+		border: 0;
+		padding: 0.25rem 0.7rem;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: background 0.15s, color 0.15s;
+
+		& + button {
+			border-left: 1px solid var(--color-border, #383a3c);
+		}
+
+		&.active {
+			background: var(--color-highlight, #3b82f6);
+			color: #fff;
+		}
+
+		&:not(.active):hover {
+			background: var(--color-component-background, #1f2123);
+			color: var(--color-normal-text, #c1c5c9);
+		}
+	}
+}
+
 .bus-timeline-route {
 	background: var(--color-component-background, #1f2123);
 	color: var(--color-normal-text, #c1c5c9);
@@ -163,11 +243,6 @@ watch(selectedRoute, () => {
 	cursor: pointer;
 }
 
-.bus-timeline-note {
-	font-size: 0.75rem;
-	color: var(--color-secondary-text, #80868b);
-}
-
 .bus-timeline-status {
 	flex: 1;
 	display: flex;
@@ -175,6 +250,8 @@ watch(selectedRoute, () => {
 	justify-content: center;
 	color: var(--color-secondary-text, #80868b);
 	font-size: 0.9rem;
+	text-align: center;
+	padding: 0 1rem;
 
 	&.err {
 		color: var(--color-warning, #ef4444);

@@ -20,39 +20,39 @@ const serverConfig = isDockerCompose
 		}
 	}
 	: isLocalBackend
-	? {
+		? {
 		// Local backend development mode
-		host: "0.0.0.0",
-		port: 3000,
-		proxy: {
-			"/api": {
-				target: "http://localhost:8080/api/v1",
-				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/api/, "")
-			},
-			"/geo_server": {
-				target: "https://citydashboard.taipei/geo_server/",
-				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/geo_server/, "")
+			host: "0.0.0.0",
+			port: 3000,
+			proxy: {
+				"/api": {
+					target: "http://localhost:8080/api/v1",
+					changeOrigin: true,
+					rewrite: (path) => path.replace(/^\/api/, "")
+				},
+				"/geo_server": {
+					target: "https://citydashboard.taipei/geo_server/",
+					changeOrigin: true,
+					rewrite: (path) => path.replace(/^\/geo_server/, "")
+				}
 			}
 		}
-	}
-	: {
-		host: "0.0.0.0",
-		port: 80,
-		proxy: {
-			"/api": {
-				target: "https://citydashboard.taipei/api/v1",
-				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/api/, "")
-			},
-			"/geo_server": {
-				target: "https://citydashboard.taipei/geo_server/",
-				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/geo_server/, "")
+		: {
+			host: "0.0.0.0",
+			port: 80,
+			proxy: {
+				"/api": {
+					target: "https://citydashboard.taipei/api/v1",
+					changeOrigin: true,
+					rewrite: (path) => path.replace(/^\/api/, "")
+				},
+				"/geo_server": {
+					target: "https://citydashboard.taipei/geo_server/",
+					changeOrigin: true,
+					rewrite: (path) => path.replace(/^\/geo_server/, "")
+				}
 			}
-		}
-	};
+		};
 
 export default defineConfig({
 	plugins: [vue(), viteCompression()],

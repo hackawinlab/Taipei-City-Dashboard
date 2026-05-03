@@ -2,6 +2,16 @@
 -- dashboardmanager DB (port 5432) migration
 -- 新增公車壅塞地圖層設定
 
+-- 0. 確保 idempotent upsert 所需的 unique 索引存在
+-- query_charts / component_maps 出廠 schema 沒有 (index,city) / (index) 的 unique 約束,
+-- 若沒有這兩個索引,下面的 ON CONFLICT 子句會以
+-- "no unique or exclusion constraint matching the ON CONFLICT specification" 失敗。
+-- 已驗證資料無重複,可直接建立。
+CREATE UNIQUE INDEX IF NOT EXISTS component_maps_index_uniq
+  ON public.component_maps (index);
+CREATE UNIQUE INDEX IF NOT EXISTS query_charts_index_city_uniq
+  ON public.query_charts (index, city);
+
 -- 1. 地圖圖層設定
 INSERT INTO public.component_maps (index, title, type, source, size, paint)
 VALUES
@@ -21,7 +31,7 @@ VALUES
     'medium',
     '{"line-color": ["get", "color"], "line-width": ["interpolate",["linear"],["zoom"],10,3,15,6], "line-opacity": ["case",["get","has_delta"],1.0,0.45]}'::json
   )
-ON CONFLICT DO NOTHING;
+ON CONFLICT (index) DO NOTHING;
 
 -- 2. Component 設定
 INSERT INTO public.components (index, name)
@@ -38,13 +48,73 @@ VALUES (
 )
 ON CONFLICT (index) DO NOTHING;
 
--- 3. query_charts 設定（地圖圖例 + 關聯圖層）
+-- 3. query_charts 設定（總覽壅塞路段數 + 關聯圖層）
 -- 注意：若 bus_congestion_layer 已存在，只更新 map_config_ids
 DO $$
 DECLARE
   abs_id   INTEGER;
   delta_id INTEGER;
   comp_created_at TIMESTAMPTZ := now();
+  taipei_query TEXT := $chart$
+WITH levels AS (
+  SELECT *
+  FROM (VALUES
+    (1, '暢通(≤0s)'),
+    (2, '輕微(+1~30s)'),
+    (3, '中度(+31~60s)'),
+    (4, '嚴重(+61~120s)'),
+    (5, '極嚴重(>120s)'),
+    (6, '無資料')
+  ) AS level(sort, name)
+),
+bucketed AS (
+  SELECT CASE
+    WHEN color IN ('#bbbbbb', '#444444') OR label ILIKE '%無資料%' THEN '無資料'
+    WHEN seg_err <= 0 THEN '暢通(≤0s)'
+    WHEN seg_err <= 30 THEN '輕微(+1~30s)'
+    WHEN seg_err <= 60 THEN '中度(+31~60s)'
+    WHEN seg_err <= 120 THEN '嚴重(+61~120s)'
+    ELSE '極嚴重(>120s)'
+  END AS name
+  FROM public.bus_congestion_segments
+  WHERE city = '台北市'
+)
+SELECT levels.name, 'line' AS type, COALESCE(COUNT(bucketed.name), 0)::float AS value
+FROM levels
+LEFT JOIN bucketed ON bucketed.name = levels.name
+GROUP BY levels.sort, levels.name
+ORDER BY levels.sort
+$chart$;
+  metrotaipei_query TEXT := $chart$
+WITH levels AS (
+  SELECT *
+  FROM (VALUES
+    (1, '暢通(≤0s)'),
+    (2, '輕微(+1~30s)'),
+    (3, '中度(+31~60s)'),
+    (4, '嚴重(+61~120s)'),
+    (5, '極嚴重(>120s)'),
+    (6, '無資料')
+  ) AS level(sort, name)
+),
+bucketed AS (
+  SELECT CASE
+    WHEN color IN ('#bbbbbb', '#444444') OR label ILIKE '%無資料%' THEN '無資料'
+    WHEN seg_err <= 0 THEN '暢通(≤0s)'
+    WHEN seg_err <= 30 THEN '輕微(+1~30s)'
+    WHEN seg_err <= 60 THEN '中度(+31~60s)'
+    WHEN seg_err <= 120 THEN '嚴重(+61~120s)'
+    ELSE '極嚴重(>120s)'
+  END AS name
+  FROM public.bus_congestion_segments
+  WHERE city IN ('台北市', '新北市')
+)
+SELECT levels.name, 'line' AS type, COALESCE(COUNT(bucketed.name), 0)::float AS value
+FROM levels
+LEFT JOIN bucketed ON bucketed.name = levels.name
+GROUP BY levels.sort, levels.name
+ORDER BY levels.sort
+$chart$;
 BEGIN
   SELECT id INTO abs_id   FROM public.component_maps WHERE index = 'bus_congestion_abs'   LIMIT 1;
   SELECT id INTO delta_id FROM public.component_maps WHERE index = 'bus_congestion_delta' LIMIT 1;
@@ -55,16 +125,17 @@ BEGIN
   VALUES
     (
       'bus_congestion_layer', 'taipei', 'map_legend',
-      $sql$SELECT unnest(array['暢通(≤0s)','輕微(+1~30s)','中度(+31~60s)','嚴重(+61~120s)','極嚴重(>120s)','無資料']) as name, 'line' as type$sql$,
+      taipei_query,
       ARRAY[abs_id, delta_id], comp_created_at, comp_created_at
     ),
     (
       'bus_congestion_layer', 'metrotaipei', 'map_legend',
-      $sql$SELECT unnest(array['暢通(≤0s)','輕微(+1~30s)','中度(+31~60s)','嚴重(+61~120s)','極嚴重(>120s)','無資料']) as name, 'line' as type$sql$,
+      metrotaipei_query,
       ARRAY[abs_id, delta_id], comp_created_at, comp_created_at
     )
   ON CONFLICT (index, city) DO UPDATE
-    SET map_config_ids = EXCLUDED.map_config_ids,
+    SET query_chart    = EXCLUDED.query_chart,
+        map_config_ids = EXCLUDED.map_config_ids,
         updated_at     = now();
 END $$;
 

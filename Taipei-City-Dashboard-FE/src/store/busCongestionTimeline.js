@@ -1,17 +1,24 @@
 /**
- * 公車壅塞時序 — virtual dashboard 註冊。
+ * 公車壅塞時序 — dashboard component block builder。
  *
- * Pipeline：BE cron → public.bus_congestion_history (dashboard DB) →
- *            matview public.bus_congestion_history_segments →
- *            BE /commute/bus-congestion/{routes,timeline} →
- *            FE BusCongestionTimeline component。
+ * Pipeline:BE cron → public.bus_congestion_history (dashboard DB) →
+ *           matview public.bus_congestion_history_segments →
+ *           BE /commute/bus-congestion/{routes,timeline} →
+ *           BusCongestionTimeline.vue。
  *
- * 仿 youbikeShortageBlocks 模式:不走 manager DB query_charts，直接由
- * FE store 組 dashboard component 物件。BusCongestionTimeline 元件自行
- * fetch API 並維護 route/state，所以 chart_data / chart_config 給空殼即可。
+ * 不走 virtual dashboard。改由 contentStore 在載入 dashboard 時,
+ * 若 BE 回的 components 裡含「bus_congestion_layer」(公車 ETA 壅塞偵測),
+ * 就在後面注入這個元件,跟它並排顯示。
+ *
+ * 用 component 判斷而非 dashboard index 名稱 — 因為 manager DB 裡
+ * smart_commute_taipei 同時掛在 台北 / 雙北 兩個 group,單看 index
+ * 沒法分辨當前 city。
+ *
+ * BusCongestionTimeline.vue 自己 fetch BE,所以 chart_data 給空 placeholder。
+ * `_virtual: true` 旗標讓 contentStore 的 chart-fetch loop 跳過,避免
+ * /component/9101/chart 打出 404 雜訊。
  */
 
-const DASHBOARD_ICON = "directions_bus";
 const SOURCE = "雙北公車 ETA / 路線 shape";
 
 const TIME_META = {
@@ -28,42 +35,15 @@ const TIME_META = {
 	history_config: null,
 };
 
-export const BUS_CONGESTION_DASHBOARDS = [
-	{
-		index: "bus-congestion-timeline-taipei",
-		name: "公車壅塞時序",
-		icon: DASHBOARD_ICON,
-		city: "taipei",
-		sliceCities: ["taipei"],
-	},
-	{
-		index: "bus-congestion-timeline-metrotaipei",
-		name: "公車壅塞時序",
-		icon: DASHBOARD_ICON,
-		city: "metrotaipei",
-		// metrotaipei: BE matview 僅含臺北市,UI 顯示資料其實是台北市,
-		// 仍保留兩個 dashboard 入口以對齊 sidebar 雙北/臺北分區。
-		sliceCities: ["metrotaipei"],
-	},
-];
+export const BUS_CONGESTION_LAYER_INDEX = "bus_congestion_layer";
+export const BUS_CONGESTION_TIMELINE_INDEX = "bus_congestion_timeline";
 
-const DASHBOARD_BY_INDEX = new Map(
-	BUS_CONGESTION_DASHBOARDS.map((d) => [d.index, d]),
-);
-
-export function isBusCongestionTimelineIndex(index) {
-	return DASHBOARD_BY_INDEX.has(index);
-}
-
-export function getBusCongestionTimelineDashboard(index) {
-	return DASHBOARD_BY_INDEX.get(index);
-}
-
-function buildBlock(sliceCity) {
+export function buildBusCongestionTimelineBlock(city) {
 	return {
 		id: 9101,
-		index: "bus_congestion_timeline",
-		city: sliceCity,
+		index: BUS_CONGESTION_TIMELINE_INDEX,
+		_virtual: true,
+		city,
 		name: "公車壅塞時序",
 		source: SOURCE,
 		short_desc:
@@ -78,15 +58,13 @@ function buildBlock(sliceCity) {
 			types: ["BusCongestionTimeline"],
 			unit: "段",
 		},
-		// chart_data 由 BusCongestionTimeline 元件內部 fetch，給空陣列當 placeholder
 		chart_data: [],
 	};
 }
 
-export async function loadBusCongestionTimelineComponents(index) {
-	const dashboard = DASHBOARD_BY_INDEX.get(index);
-	if (!dashboard) {
-		throw new Error(`Unknown bus congestion dashboard index: ${index}`);
-	}
-	return dashboard.sliceCities.map((sliceCity) => buildBlock(sliceCity));
+// 判斷此 dashboard 是否該注入 timeline 元件。
+// 規則:BE 回的 components 裡含 bus_congestion_layer (id 4 / index 'bus_congestion_layer')。
+export function shouldInjectBusTimeline(components) {
+	if (!Array.isArray(components)) return false;
+	return components.some((c) => c?.index === BUS_CONGESTION_LAYER_INDEX);
 }

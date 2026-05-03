@@ -76,10 +76,10 @@ const activeCityScope = computed(() =>
 
 const filteredRouteOptions = computed(() => {
 	const query = routeSearch.value.trim().toLowerCase();
-	if (!query) return routeOptions.value.slice(0, 80);
-	return routeOptions.value
-		.filter((routeName) => routeName.toLowerCase().includes(query))
-		.slice(0, 80);
+	if (!query) return routeOptions.value;
+	return routeOptions.value.filter((routeName) =>
+		routeName.toLowerCase().includes(query),
+	);
 });
 
 function featureMatchesCity(properties) {
@@ -204,7 +204,7 @@ watch(
 <template>
   <div class="maplegend">
     <div
-      v-if="isBusCongestionLayer"
+      v-if="isBusCongestionLayer && map_filter_on"
       class="maplegend-route-filter"
     >
       <button
@@ -213,7 +213,7 @@ watch(
         :class="{ active: selectedRouteName }"
         @click="routeFilterOpen = !routeFilterOpen"
       >
-        <span class="material-icons">filter_alt</span>
+        <span class="material-icons">search</span>
         <span>{{ selectedRouteName || "公車路線" }}</span>
       </button>
       <button
@@ -273,7 +273,7 @@ watch(
           :src="returnIcon(item.icon)"
         >
         <!-- If there is a value attached, show the value -->
-        <div v-if="item.value">
+        <div v-if="item.value !== undefined && item.value !== null">
           <h5>{{ item.name }}</h5>
           <h6>{{ item.value }} {{ chart_config.unit }}</h6>
         </div>

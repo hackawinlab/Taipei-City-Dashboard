@@ -472,9 +472,10 @@ var busCongestionLabelOrder = []string{"暢通", "輕微", "中度", "嚴重", "
 // GetBusCongestionRoutes handles GET /api/v1/commute/bus-congestion/routes
 // Query params: city (taipei|metrotaipei, default taipei).
 //
-// Returns a flat list of route_name strings. metrotaipei is accepted but
-// returns an empty list with `note` because the local matview only contains
-// 臺北市 edge history.
+// Returns the full list of route_name values from bus_congestion_segments
+// for the requested scope (taipei → 台北市; metrotaipei → 台北市+新北市).
+// Routes without edge history will still show up here so users can pick
+// them; the timeline endpoint communicates the data gap via data_note.
 func GetBusCongestionRoutes(c *gin.Context) {
 	city := c.DefaultQuery("city", "taipei")
 	if !busCongestionValidateCity(city) {
@@ -488,15 +489,9 @@ func GetBusCongestionRoutes(c *gin.Context) {
 		return
 	}
 
-	note := ""
-	if city == "metrotaipei" {
-		note = "目前 history matview 僅涵蓋臺北市 edge,新北市路線資料尚未 enrich"
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"data": routes,
 		"city": city,
-		"note": note,
 	})
 }
 
@@ -565,12 +560,26 @@ func GetBusCongestionTimeline(c *gin.Context) {
 		series = append(series, *seriesByLabel[name])
 	}
 
+	// Surface the data gap when the matview has no rows for the requested
+	// route. The dropdown source (bus_congestion_segments) is broader than
+	// the matview (history_segments) by design, so users can pick a 新北
+	// route like "275" and end up here with zero rows. Tell them why.
+	dataNote := ""
+	if len(categories) == 0 {
+		if routeName != "" {
+			dataNote = "此路線目前無邊段歷史資料(matview 僅含台北市 edge)"
+		} else {
+			dataNote = "此 city 目前無邊段歷史資料"
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"city":           city,
 		"route_name":     routeName,
 		"snapshot_count": len(categories),
 		"categories":     categories,
 		"series":         series,
+		"data_note":      dataNote,
 	})
 }
 
