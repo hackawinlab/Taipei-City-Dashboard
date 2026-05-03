@@ -18,6 +18,25 @@ This section describes how the repo is actually run on this machine (non-Docker 
 
 ### Prerequisites (one-time)
 
+#### Shared file server (192.168.10.71)
+
+The remote machine at `192.168.10.71` hosts shared data (YouBike CSVs, SQL dumps, etc.) under `/home/winlab/shared`. Mount it once per session:
+
+```bash
+mkdir -p ~/winlab-shared
+sshfs winlab@192.168.10.71:/home/winlab/shared ~/winlab-shared \
+  -o reconnect,ServerAliveInterval=15,ServerAliveCountMax=3,follow_symlinks
+```
+
+SSH key (`ssh-ed25519`) is already authorised on the target. If `sshfs` is missing: `sudo apt-get install -y sshfs`. If the host key is unknown: `ssh-keyscan -H 192.168.10.71 >> ~/.ssh/known_hosts`.
+
+After mounting, `~/winlab-shared/` contains at minimum:
+- `data/` — YouBike CSV snapshots (also reachable via `rsync` path above)
+- `bus-poc/` — bus congestion proof-of-concept
+- `eta_snapshots_*.csv` — ETA snapshots
+
+#### System services
+
 Ubuntu ships with system `postgresql` (port 5432) and `redis-server` (port 6379) that conflict with Docker containers. Disable them permanently:
 
 ```bash
@@ -219,6 +238,19 @@ The Go binary optionally loads an ONNX e5 model for semantic embedding. `InitLmS
 
 The `api_endpoint` column in `component_maps` was added via `ALTER TABLE component_maps ADD COLUMN IF NOT EXISTS api_endpoint VARCHAR` (in `youbike-timemap-seed.sql`).
 
+### Chart Data Source Types
+
+`component_charts.api_endpoint` controls how `contentStore.setCurrentDashboardAllChartData()` fetches chart data:
+
+| `api_endpoint` value | Behavior |
+|---|---|
+| `null` (default) | Fetches `/component/{id}/chart` (executes `query_charts.query_chart` SQL against DBDashboard) |
+| `/commute/...` | Fetches that URL with `?city=...` query (BE controller serves computed metrics, e.g. cross-DB aggregates) |
+
+Mirrors the `component_maps.api_endpoint` pattern used by `youbike_timemap`. URL convention: chart `api_endpoint` does **not** include the `/api` prefix (FE uses the `http` Axios instance whose `baseURL` already prepends `/api`); map `api_endpoint` does include `/api` (FE uses raw `axios`). The two will be unified in a future refactor.
+
+The `api_endpoint` column was added via `ALTER TABLE component_charts ADD COLUMN IF NOT EXISTS api_endpoint VARCHAR;` (in `youbike-shortage-blocks-seed.sql`).
+
 ### Layer ID pattern
 
 `layerId` is computed as `${index}-${type}-${city}` throughout mapStore and chart components. The `city` field comes from `component_maps` which has no city column, so it is always `undefined`, yielding e.g. `youbike_timemap-circle-undefined`. This is consistent and intentional.
@@ -277,6 +309,35 @@ GET /api/v1/commute/youbike/blacklist?city=all&limit=20
 Component `youbike_timemap` (ID=1) is in dashboards `map-layers-taipei` and `map-layers-metrotaipei`. Navigate to 台北市 → 圖資資訊 to see it.
 
 **PostgreSQL gotcha:** `ROUND(double precision, integer)` doesn't exist — must cast first: `ROUND(value::numeric, 1)`.
+
+---
+
+### YouBike 缺車成因 — persistence / imbalance (branch: `feat/youbike-shortage-dashboard`)
+
+兩個分析 block 併入「Youbike Analysis」dashboard：`youbike_persistence`（長時段缺車站排行）與 `youbike_imbalance`（站點淨流出量排行）。走 `component_charts.api_endpoint` 規約讓 chart-data fetch 從 `/commute/youbike/persistence` 與 `/commute/youbike/imbalance` 取資料，BE 內部 reuse `aggregate.Run()` cache。
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `Taipei-City-Dashboard-BE/app/models/componentConfig.go` | `ComponentChart` 加 `ApiEndpoint *string` 欄位 |
+| `Taipei-City-Dashboard-BE/app/controllers/commute.go` | 抽 `getYouBikeAggregatePayload` helper；新增 `GetYouBikePersistenceChart`、`GetYouBikeImbalanceChart` |
+| `Taipei-City-Dashboard-BE/app/routes/router.go` | 註冊 `/commute/youbike/{persistence,imbalance}` |
+| `db-sample-data/youbike-shortage-blocks-seed.sql` | idempotent seed：ALTER TABLE 加 api_endpoint、insert 兩個 component + chart + 4 個 query_chart、把兩 dashboard 的 `components` 重建成 6 個 id |
+| `scripts/load-ubike-data.sh` | step 2 多跑此 seed |
+| `Taipei-City-Dashboard-FE/src/store/contentStore.js` | chart-data fetch 看到 `chart_config.api_endpoint` 就改打該 URL；移除 youbikeShortageBlocks shim 相關所有分支 |
+| `Taipei-City-Dashboard-FE/src/views/DashboardView.vue` | 兩處 favorite-btn 不再過濾 `isYoubikeShortageIndex`，import 移除 |
+| `Taipei-City-Dashboard-FE/src/store/youbikeShortageBlocks.js` | **刪除** |
+
+**API endpoints:**
+
+```
+GET /api/v1/commute/youbike/persistence?city=taipei|metrotaipei
+  → { status, data: [{name, data: [{x: station, y: empty_hours}, ...]}], categories: [...] } (top 20)
+
+GET /api/v1/commute/youbike/imbalance?city=taipei|metrotaipei
+  → { status, data: [{name, data: [{x: station, y: -imbalance}, ...]}], categories: [...] } (top 15)
+```
 
 ---
 

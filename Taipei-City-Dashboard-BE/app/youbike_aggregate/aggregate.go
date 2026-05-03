@@ -1,12 +1,14 @@
-// Package youbike_aggregate computes the YouBike shortage analysis dashboard
-// payload from the hackathon-DB youbike_snapshots table. It is consumed
-// directly by controllers/commute.GetYouBikeShortageAnalysis — there is no
-// CSV input or static JSON output any more; load-ubike-data.sh seeds the
-// table once and the dashboard fetches an API endpoint from then on.
+// Package youbike_aggregate computes the YouBike shortage analysis payload
+// from the hackathon-DB youbike_snapshots table. It is consumed by
+// controllers/commute.GetYouBikePersistenceChart and
+// controllers/commute.GetYouBikeImbalanceChart via getYouBikeAggregatePayload.
+// load-ubike-data.sh seeds the table once; the dashboard fetches API endpoints
+// from then on.
 //
 // Logic is a stdlib-only Go port of the original
-// data/aggregate_youbike_hourly.py. Only the four blocks the frontend reads
-// (timeline_low, bar_persistence, heatmap, imbalance) are computed.
+// data/aggregate_youbike_hourly.py. Four blocks are computed
+// (timeline_low, bar_persistence, heatmap, imbalance); the frontend currently
+// reads bar_persistence and imbalance only.
 package youbike_aggregate
 
 import (
@@ -22,16 +24,14 @@ const (
 	emptyThreshold    = 1.0
 	lowRatioThreshold = 0.2
 	burstThreshold    = 5
-	heatmapMinDocks   = 30
 	topNPersistence   = 25
-	topNHeatmap       = 25
 	topNImbalance     = 15
 )
 
 // taipeiLoc localises every snapshot_at the moment we read it from
-// youbike_snapshots (TIMESTAMPTZ → Go time defaults to UTC). All hour-bucket
-// labels and timeline X axes need to land on the Taipei wall clock to match
-// commute.go's `AT TIME ZONE 'Asia/Taipei'` SQL convention.
+// youbike_snapshots (TIMESTAMPTZ → Go time defaults to UTC). Hour bucketing
+// must land on the Taipei wall clock to match commute.go's
+// `AT TIME ZONE 'Asia/Taipei'` SQL convention.
 var taipeiLoc = func() *time.Location {
 	loc, err := time.LoadLocation("Asia/Taipei")
 	if err != nil {
@@ -65,33 +65,11 @@ type stationHour struct {
 	IsEmpty, IsLow    bool
 }
 
-// hourCity is a per-(hour, city) summary used to build the timeline_low block.
-type hourCity struct {
-	Hour          time.Time
-	City          string
-	StationCount  int
-	EmptyStations int
-	LowStations   int
-}
-
-// Payload mirrors the subset of the original aggregator JSON that the
-// frontend actually reads (see Taipei-City-Dashboard-FE/src/store/youbikeShortageBlocks.js).
+// Payload is the aggregator output read by controllers/commute.go's
+// GetYouBikePersistenceChart and GetYouBikeImbalanceChart.
 type Payload struct {
-	TimelineLow    []TimelineSeries                     `json:"timeline_low"`
 	BarPersistence map[string][]PersistenceEntry        `json:"bar_persistence"`
-	Heatmap        map[string]HeatmapBlock              `json:"heatmap"`
 	Imbalance      map[string]map[string][]ImbalanceRow `json:"imbalance"`
-}
-
-// TimelineSeries is one line in the low-bike-ratio chart (one per city).
-type TimelineSeries struct {
-	Name string          `json:"name"`
-	Data []TimelinePoint `json:"data"`
-}
-
-type TimelinePoint struct {
-	X string  `json:"x"`
-	Y float64 `json:"y"`
 }
 
 // PersistenceEntry is one row of the chronic-shortage bar block.
@@ -105,22 +83,6 @@ type PersistenceEntry struct {
 	LowHourRatio   float64 `json:"low_hour_ratio"`
 	AvgFillRatio   float64 `json:"avg_fill_ratio"`
 	TotalDocks     int     `json:"total_docks"`
-}
-
-// HeatmapBlock is one city's heatmap (top-N volatile stations × hour-of-day).
-type HeatmapBlock struct {
-	Categories []string        `json:"categories"`
-	Series     []HeatmapSeries `json:"series"`
-}
-
-type HeatmapSeries struct {
-	Name string         `json:"name"`
-	Data []HeatmapPoint `json:"data"`
-}
-
-type HeatmapPoint struct {
-	X string   `json:"x"`
-	Y *float64 `json:"y"`
 }
 
 // ImbalanceRow is one row of the borrow/return-imbalance ranking.
@@ -198,9 +160,6 @@ func floorHour(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
 }
 
-func hourLabelHHMM(t time.Time) string { return t.Format("15:04") }
-func hourISO(t time.Time) string       { return t.Format("2006-01-02T15:04:05") }
-
 type stationKey struct {
 	hour       time.Time
 	stationUID string
@@ -255,52 +214,6 @@ func aggregateByStation(snapshots []Snapshot) []stationHour {
 			IsLow:             !math.IsNaN(fillRatio) && fillRatio < lowRatioThreshold,
 		})
 	}
-	return out
-}
-
-func aggregateByHourCity(byStation []stationHour) []hourCity {
-	type acc struct {
-		hour       time.Time
-		city       string
-		stations   map[string]struct{}
-		empty, low int
-	}
-	type key struct {
-		hour time.Time
-		city string
-	}
-	buckets := map[key]*acc{}
-	for _, s := range byStation {
-		k := key{s.Hour, s.City}
-		a, ok := buckets[k]
-		if !ok {
-			a = &acc{hour: s.Hour, city: s.City, stations: map[string]struct{}{}}
-			buckets[k] = a
-		}
-		a.stations[s.StationUID] = struct{}{}
-		if s.IsEmpty {
-			a.empty++
-		}
-		if s.IsLow {
-			a.low++
-		}
-	}
-	out := make([]hourCity, 0, len(buckets))
-	for _, a := range buckets {
-		out = append(out, hourCity{
-			Hour:          a.hour,
-			City:          a.city,
-			StationCount:  len(a.stations),
-			EmptyStations: a.empty,
-			LowStations:   a.low,
-		})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if !out[i].Hour.Equal(out[j].Hour) {
-			return out[i].Hour.Before(out[j].Hour)
-		}
-		return out[i].City < out[j].City
-	})
 	return out
 }
 
@@ -494,149 +407,14 @@ func buildBarPersistence(byStation []stationHour, cities []string) map[string][]
 	return out
 }
 
-func buildHeatmap(byStation []stationHour, cities []string) map[string]HeatmapBlock {
-	// Per-station total_docks, station name, and the slice of fill_ratio
-	// observations needed to compute the std-dev rank.
-	type fillAcc struct {
-		city        string
-		stationName string
-		totalDocks  int
-		fillValues  []float64
-	}
-	fillBuckets := map[string]*fillAcc{}
-	for _, s := range byStation {
-		if math.IsNaN(s.FillRatio) {
-			continue
-		}
-		a, ok := fillBuckets[s.StationUID]
-		if !ok {
-			a = &fillAcc{city: s.City, stationName: s.StationName}
-			fillBuckets[s.StationUID] = a
-		}
-		if s.TotalDocks > a.totalDocks {
-			a.totalDocks = s.TotalDocks
-		}
-		a.fillValues = append(a.fillValues, s.FillRatio)
-	}
-
-	stdOf := func(values []float64) float64 {
-		if len(values) <= 1 {
-			return 0
-		}
-		var mean float64
-		for _, v := range values {
-			mean += v
-		}
-		mean /= float64(len(values))
-		var sumSq float64
-		for _, v := range values {
-			d := v - mean
-			sumSq += d * d
-		}
-		// pandas DataFrame.std defaults to ddof=1 (sample std).
-		return math.Sqrt(sumSq / float64(len(values)-1))
-	}
-
-	type fillStat struct {
-		stationUID string
-		city       string
-		std        float64
-	}
-	stats := []fillStat{}
-	stationNames := map[string]string{}
-	for uid, a := range fillBuckets {
-		if a.totalDocks < heatmapMinDocks {
-			continue
-		}
-		stationNames[uid] = a.stationName
-		stats = append(stats, fillStat{
-			stationUID: uid,
-			city:       a.city,
-			std:        stdOf(a.fillValues),
-		})
-	}
-
-	type hourStation struct{ uid, label string }
-	hourStationFill := map[hourStation]float64{}
-	hourLabels := map[string]struct{}{}
-	for _, s := range byStation {
-		if math.IsNaN(s.FillRatio) {
-			continue
-		}
-		hl := hourLabelHHMM(s.Hour)
-		hourLabels[hl] = struct{}{}
-		hourStationFill[hourStation{s.StationUID, hl}] = s.FillRatio
-	}
-	categories := make([]string, 0, len(hourLabels))
-	for h := range hourLabels {
-		categories = append(categories, h)
-	}
-	sort.Strings(categories)
-
-	out := map[string]HeatmapBlock{}
-	for _, city := range cities {
-		view := []fillStat{}
-		for _, r := range stats {
-			if city == "All" || r.city == city {
-				view = append(view, r)
-			}
-		}
-		sort.Slice(view, func(i, j int) bool { return view[i].std > view[j].std })
-		if len(view) > topNHeatmap {
-			view = view[:topNHeatmap]
-		}
-
-		series := make([]HeatmapSeries, 0, len(view))
-		for _, r := range view {
-			pts := make([]HeatmapPoint, 0, len(categories))
-			for _, hl := range categories {
-				pt := HeatmapPoint{X: hl}
-				if v, ok := hourStationFill[hourStation{r.stationUID, hl}]; ok {
-					rounded := roundTo(v*100, 1)
-					pt.Y = &rounded
-				}
-				pts = append(pts, pt)
-			}
-			series = append(series, HeatmapSeries{
-				Name: stripPrefix(stationNames[r.stationUID]),
-				Data: pts,
-			})
-		}
-		out[city] = HeatmapBlock{Categories: categories, Series: series}
-	}
-	return out
-}
-
-func buildTimelineLow(summary []hourCity) []TimelineSeries {
-	out := []TimelineSeries{}
-	for _, city := range []string{"Taipei", "NewTaipei"} {
-		pts := []TimelinePoint{}
-		for _, r := range summary {
-			if r.City != city {
-				continue
-			}
-			ratio := 0.0
-			if r.StationCount > 0 {
-				ratio = float64(r.LowStations) / float64(r.StationCount) * 100
-			}
-			pts = append(pts, TimelinePoint{X: hourISO(r.Hour), Y: roundTo(ratio, 2)})
-		}
-		out = append(out, TimelineSeries{Name: city, Data: pts})
-	}
-	return out
-}
-
-// BuildPayload runs the full aggregation pipeline against an in-memory slice
-// of snapshots and returns the four blocks the dashboard frontend reads.
+// BuildPayload runs the aggregation pipeline against an in-memory slice of
+// snapshots and returns the persistence + imbalance blocks the dashboard reads.
 func BuildPayload(snapshots []Snapshot) Payload {
 	cities := []string{"All", "Taipei", "NewTaipei"}
 	byStation := aggregateByStation(snapshots)
-	summary := aggregateByHourCity(byStation)
 
 	return Payload{
-		TimelineLow:    buildTimelineLow(summary),
 		BarPersistence: buildBarPersistence(byStation, cities),
-		Heatmap:        buildHeatmap(byStation, cities),
 		Imbalance:      computeImbalance(snapshots, cities),
 	}
 }

@@ -16,12 +16,6 @@ import { useDialogStore } from "./dialogStore";
 import { useAuthStore } from "./authStore";
 import { getComponentDataTimeframe } from "../assets/utilityFunctions/dataTimeframe";
 import { CityManager } from "../dashboardComponent/utilities/cityManager";
-import {
-	YOUBIKE_SHORTAGE_DASHBOARDS,
-	isYoubikeShortageIndex,
-	getYoubikeShortageDashboard,
-	loadYoubikeShortageComponents,
-} from "./youbikeShortageBlocks";
 
 export const useContentStore = defineStore("content", {
 	state: () => ({
@@ -112,41 +106,6 @@ export const useContentStore = defineStore("content", {
 		setMapLayerData(index, component) {
 			this.mapLayers[index] = component;
 		},
-		// Inject local YouBike 缺車分析 dashboards into each city list (idempotent).
-		// 仿 production：臺北版掛 taipei 群組、雙北版掛 metrotaipei 群組。
-		injectYoubikeShortageDashboard() {
-			YOUBIKE_SHORTAGE_DASHBOARDS.forEach((d) => {
-				const list = this.dashboards.get(d.city) ?? [];
-				if (list.find((item) => item.index === d.index)) {
-					return;
-				}
-				list.unshift({ index: d.index, name: d.name, icon: d.icon });
-				this.dashboards.set(d.city, list);
-			});
-		},
-		// Load a YouBike 缺車分析 dashboard from local JSON (skip BE)
-		async loadYoubikeShortageDashboard(index) {
-			const dashboard = getYoubikeShortageDashboard(index);
-			if (!dashboard) {
-				this.error = true;
-				this.loading = false;
-				return;
-			}
-			this.currentDashboard.name = dashboard.name;
-			this.currentDashboard.icon = dashboard.icon;
-			try {
-				const components = await loadYoubikeShortageComponents(index);
-				this.cityDashboard.components = components;
-				this.filterCurrentDashboardContent();
-			} catch (error) {
-				console.error("Failed to load YouBike shortage dashboard:", error);
-				this.cityDashboard.components = [];
-				this.currentDashboard.components = [];
-				this.currentDashboardExcluded.components = [];
-				this.error = true;
-			}
-			this.loading = false;
-		},
 		/* Steps in adding content to the application (/dashboard or /mapview) */
 		// 1. Check the current path and execute actions based on the current path
 		setRouteParams(mode, index, city) {
@@ -221,9 +180,6 @@ export const useContentStore = defineStore("content", {
 				}
 			});
 
-			// Inject local YouBike 缺車分析 dashboard into 雙北 list
-			this.injectYoubikeShortageDashboard();
-
 			if (onlyDashboard) return;
 
 			// 2-1. If the current path is /dashboard or /mapview, redirect to the first dashboard
@@ -282,12 +238,6 @@ export const useContentStore = defineStore("content", {
 		},
 		// 3. Call an API to get all component info of the current index dashboard not filtered by city and store it
 		async setCurrentDashboardAllContent() {
-			// Local injected dashboard: skip BE and load from local JSON
-			if (isYoubikeShortageIndex(this.currentDashboard.index)) {
-				await this.loadYoubikeShortageDashboard(this.currentDashboard.index);
-				return;
-			}
-
 			const currentCityDashboards = this.currentDashboard.city
 				? this.getDashboardsByCity(this.currentDashboard.city)
 				: this.personalDashboards;
@@ -351,24 +301,32 @@ export const useContentStore = defineStore("content", {
 				) {
 					const component = this.cityDashboard.components[index];
 					try {
-						// 4-2. Get chart data
-						const response = await http.get(
-							`/component/${component.id}/chart`,
-							{
-								params: {
-									city: component.city,
-									...(!["static", "current", "demo"].includes(
-										component.time_from,
-									)
-										? getComponentDataTimeframe(
+						// 4-2. Get chart data — components with chart_config.api_endpoint
+						// (mirror of component_maps.api_endpoint) take priority over the
+						// stored SQL path, letting BE controllers serve computed metrics
+						// from a different DB without faking SQL through GORM.
+						const apiEndpoint = component.chart_config?.api_endpoint;
+						const response = apiEndpoint
+							? await http.get(apiEndpoint, {
+									params: { city: component.city },
+								})
+							: await http.get(
+									`/component/${component.id}/chart`,
+									{
+										params: {
+											city: component.city,
+											...(!["static", "current", "demo"].includes(
 												component.time_from,
-												component.time_to,
-												true,
 											)
-										: {}),
-								},
-							},
-						);
+												? getComponentDataTimeframe(
+														component.time_from,
+														component.time_to,
+														true,
+													)
+												: {}),
+										},
+									},
+								);
 
 						this.cityDashboard.components[index].chart_data =
 							response.data.data;
@@ -963,25 +921,29 @@ export const useContentStore = defineStore("content", {
 				index < dialogStore.moreInfoContent.length;
 				index++
 			) {
-				const response_2 = await http.get(
-					`/component/${dialogStore.moreInfoContent[index].id}/chart`,
-					{
-						params: {
-							city: dialogStore.moreInfoContent[index].city,
-							...(!["static", "current", "demo"].includes(
-								dialogStore.moreInfoContent[index].time_from,
-							)
-								? getComponentDataTimeframe(
-										dialogStore.moreInfoContent[index]
-											.time_from,
-										dialogStore.moreInfoContent[index]
-											.time_to,
-										true,
+				const item = dialogStore.moreInfoContent[index];
+				const apiEndpoint = item.chart_config?.api_endpoint;
+				const response_2 = apiEndpoint
+					? await http.get(apiEndpoint, {
+							params: { city: item.city },
+						})
+					: await http.get(
+							`/component/${item.id}/chart`,
+							{
+								params: {
+									city: item.city,
+									...(!["static", "current", "demo"].includes(
+										item.time_from,
 									)
-								: {}),
-						},
-					},
-				);
+										? getComponentDataTimeframe(
+												item.time_from,
+												item.time_to,
+												true,
+											)
+										: {}),
+								},
+							},
+						);
 
 				dialogStore.moreInfoContent[index].chart_data =
 					response_2.data.data;
