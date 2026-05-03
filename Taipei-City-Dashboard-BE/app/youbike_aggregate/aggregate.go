@@ -1,12 +1,14 @@
-// Package youbike_aggregate computes the YouBike shortage analysis dashboard
-// payload from the hackathon-DB youbike_snapshots table. It is consumed
-// directly by controllers/commute.GetYouBikeShortageAnalysis — there is no
-// CSV input or static JSON output any more; load-ubike-data.sh seeds the
-// table once and the dashboard fetches an API endpoint from then on.
+// Package youbike_aggregate computes the YouBike shortage analysis payload
+// from the hackathon-DB youbike_snapshots table. It is consumed by
+// controllers/commute.GetYouBikePersistenceChart and
+// controllers/commute.GetYouBikeImbalanceChart via getYouBikeAggregatePayload.
+// load-ubike-data.sh seeds the table once; the dashboard fetches API endpoints
+// from then on.
 //
 // Logic is a stdlib-only Go port of the original
-// data/aggregate_youbike_hourly.py. Only the four blocks the frontend reads
-// (timeline_low, bar_persistence, heatmap, imbalance) are computed.
+// data/aggregate_youbike_hourly.py. Four blocks are computed
+// (timeline_low, bar_persistence, heatmap, imbalance); the frontend currently
+// reads bar_persistence and imbalance only.
 package youbike_aggregate
 
 import (
