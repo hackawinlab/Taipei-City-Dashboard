@@ -25,4 +25,5 @@ export const chartTypes: chartType = {
 	MapLegend: "地圖圖例", // V
 	TextUnitChart: "文字數值圖", // V
 	YouBikeTimeMap: "時間軸地圖", // V
+	BusCongestionTimeline: "公車壅塞時序", // V
 };
