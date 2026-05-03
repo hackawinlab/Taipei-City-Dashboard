@@ -29,7 +29,7 @@ const cityScope = ref(props.activeCity === "metrotaipei" ? "metrotaipei" : "taip
 const routes = ref([]);
 const selectedRoute = ref("");
 const categories = ref([]);
-const series = ref([]);
+const timelineSeries = ref([]);
 const dataNote = ref("");
 const loading = ref(false);
 const errMsg = ref("");
@@ -49,7 +49,7 @@ const chartOptions = computed(() => ({
 		zoom: { allowMouseWheelZoom: false },
 		background: "transparent",
 	},
-	colors: series.value.map((s) => SEVERITY_COLORS[s.name] || "#888"),
+	colors: timelineSeries.value.map((s) => SEVERITY_COLORS[s.name] || "#888"),
 	dataLabels: { enabled: false },
 	grid: { show: false },
 	legend: { show: true, position: "bottom" },
@@ -79,7 +79,7 @@ async function loadRoutes() {
 			params: { city: cityScope.value },
 		});
 		routes.value = res.data.data || [];
-	} catch (e) {
+	} catch {
 		routes.value = [];
 	}
 }
@@ -92,12 +92,12 @@ async function loadTimeline() {
 			params: { city: cityScope.value, route_name: selectedRoute.value },
 		});
 		categories.value = res.data.categories || [];
-		series.value = res.data.series || [];
+		timelineSeries.value = res.data.series || [];
 		dataNote.value = res.data.data_note || "";
-	} catch (e) {
+	} catch {
 		errMsg.value = "載入失敗";
 		categories.value = [];
-		series.value = [];
+		timelineSeries.value = [];
 		dataNote.value = "";
 	} finally {
 		loading.value = false;
@@ -181,7 +181,7 @@ watch(selectedRoute, () => {
       type="bar"
       height="100%"
       :options="chartOptions"
-      :series="series"
+      :series="timelineSeries"
     />
   </div>
 </template>

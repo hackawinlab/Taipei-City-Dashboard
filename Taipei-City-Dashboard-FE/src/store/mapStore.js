@@ -480,6 +480,11 @@ export const useMapStore = defineStore("map", {
 					}
 					return;
 				}
+				// 1-1b. Already in-flight from an earlier synchronous call (e.g. AI batched events
+				// toggling components that share map_config layers); skip the duplicate fetch.
+				if (this.loadingLayers.includes(mapLayerId)) {
+					return;
+				}
 				let appendLayer = { ...element };
 				appendLayer.layerId = mapLayerId;
 				// 1-2. If the layer doesn't exist, call an API to get the layer data

@@ -18,6 +18,7 @@ func init() {
 	Register("get_current_time", GetCurrentTime)
 	Register("get_population_summary", GetPopulationSummary)
 	Register(NavigateToDashboardName, NavigateToDashboard)
+	Register(ToggleMapLayerName, ToggleMapLayer)
 }
 
 // Register adds a tool to the registry

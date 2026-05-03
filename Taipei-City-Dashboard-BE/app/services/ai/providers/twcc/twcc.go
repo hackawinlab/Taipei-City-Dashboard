@@ -471,6 +471,12 @@ func extractXMLToolCalls(text string) ([]llms.ToolCall, string) {
 		})
 		remainingText = remainingText[:startIdx] + remainingText[endIdx+len(endTag):]
 	}
+	// Strip hallucinated separators LLMs emit between batched text-format tool calls.
+	// MUST be ordered longest-first; "->>>" is a prefix of "->>>|separate|" and would
+	// swallow the longer form's prefix if processed first.
+	for _, sep := range []string{"->>>|separate|", ">>>|separate|", "|separate|", "->>>"} {
+		remainingText = strings.ReplaceAll(remainingText, sep, "")
+	}
 	return toolCalls, strings.TrimSpace(remainingText)
 }
 

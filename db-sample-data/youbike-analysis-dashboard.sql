@@ -4,11 +4,11 @@
 -- Idempotent: safe to re-run.
 
 -- 1. Dashboards (one per city, both named "共享單車")
---    Components: youbike_timemap(1), youbike_availability(60), bike_network(213), bike_map(217)
+--    Components: youbike_timemap(1), bike_network(213), bike_map(217)
 INSERT INTO dashboards (index, name, components, icon, updated_at, created_at)
 VALUES
-  ('youbike-analysis-taipei',      '共享單車', '{1,60,217,213}', 'pedal_bike', NOW(), NOW()),
-  ('youbike-analysis-metrotaipei', '共享單車', '{1,60,217,213}', 'pedal_bike', NOW(), NOW())
+  ('youbike-analysis-taipei',      '共享單車', '{1,217,213}', 'pedal_bike', NOW(), NOW()),
+  ('youbike-analysis-metrotaipei', '共享單車', '{1,217,213}', 'pedal_bike', NOW(), NOW())
 ON CONFLICT (index) DO UPDATE
   SET name = EXCLUDED.name,
       components = EXCLUDED.components,

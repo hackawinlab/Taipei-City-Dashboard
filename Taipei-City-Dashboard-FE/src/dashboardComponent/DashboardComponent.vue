@@ -122,16 +122,12 @@ const showAI = computed(
 		activeChart.value === "YouBikeTimeMap" && props.mode !== "preview"
 );
 const aiPanelOpen = ref(false);
-const aiPrompt = ref("幫我看公館晚高峰");
+const aiPrompt = ref("");
 const aiLoading = ref(false);
 const aiError = ref("");
 const aiResult = ref(null);
 const chartRef = ref(null);
-const suggestedPrompts = [
-	"公館晚高峰",
-	"台北車站早高峰",
-	"市政府晚上8點",
-];
+const suggestedPrompts = ref([]);
 const aiAnchor = ref({ top: 80, left: 24 });
 const aiPanelStyle = computed(() => {
 	if (!props.mode.includes("map")) return null;
@@ -161,6 +157,22 @@ function areaInsightOf(result) {
 	return list.find((i) => i?.kind === "area_availability") || null;
 }
 
+async function loadStarterPrompts() {
+	if (suggestedPrompts.value.length > 0) return;
+	try {
+		const res = await http.post("/ai/component-action", {
+			component_id: "youbike_timemap",
+			user_message: "",
+		});
+		const fus = res.data?.followups || [];
+		suggestedPrompts.value = fus
+			.map((fu) => followupAction(fu))
+			.filter(Boolean);
+	} catch {
+		// Silent; panel still works, suggestion chips just stay empty.
+	}
+}
+
 function onAIClick(event) {
 	if (props.mode.includes("map") && !toggleOn.value) {
 		toggleOn.value = true;
@@ -186,6 +198,7 @@ function onAIClick(event) {
 		aiAnchor.value = { top, left };
 	}
 	aiPanelOpen.value = !aiPanelOpen.value;
+	if (aiPanelOpen.value) loadStarterPrompts();
 }
 
 async function submitAIAction(prompt = aiPrompt.value) {

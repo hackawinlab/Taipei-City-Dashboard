@@ -45,7 +45,13 @@ type AIChatInput struct {
 			Parameters  interface{} `json:"parameters,omitempty"`
 		} `json:"function" binding:"required"`
 	} `json:"tools,omitempty"`
-	ToolChoice interface{} `json:"tool_choice,omitempty"`
+	ToolChoice  interface{} `json:"tool_choice,omitempty"`
+	PageContext *struct {
+		Route              string                  `json:"route"`
+		City               string                  `json:"city"`
+		OpenLayers         []control.OpenLayer     `json:"open_layers"`
+		AvailableMapLayers []control.MapLayerEntry `json:"available_map_layers"`
+	} `json:"page_context,omitempty"`
 }
 
 // ChatWithTWCC is the controller for POST /api/v1/ai/chat/twai
@@ -69,19 +75,34 @@ func ChatWithTWCC(c *gin.Context) {
 
 	// 2. Prepare AI Request
 	_, accountID, _, _, _ := util.GetUserInfoFromContext(c)
+
+	var pageCtx control.PageContext
+	if input.PageContext != nil {
+		pageCtx = control.PageContext{
+			Route:              input.PageContext.Route,
+			City:               input.PageContext.City,
+			OpenLayers:         input.PageContext.OpenLayers,
+			AvailableMapLayers: input.PageContext.AvailableMapLayers,
+		}
+	}
+
 	req := ai.AIChatRequest{
-		SessionID: sessionID,
-		UserID:    fmt.Sprintf("%d", accountID),
-		IPAddress: c.ClientIP(),
-		Messages:  input.ToServiceMessages(),
+		SessionID:   sessionID,
+		UserID:      fmt.Sprintf("%d", accountID),
+		IPAddress:   c.ClientIP(),
+		Messages:    input.ToServiceMessages(),
+		PageContext: pageCtx,
 	}
 
 	// 3. Prepare Dynamic Options
 	options := input.ToCallOptions()
-	options = ai.WithUIControlTools(options)
+	options = ai.WithUIControlTools(options, pageCtx)
 
 	var bag []control.Event
 	ctx := control.WithBag(c.Request.Context(), &bag)
+	if len(pageCtx.AvailableMapLayers) > 0 {
+		ctx = control.WithAvailableLayers(ctx, pageCtx.AvailableMapLayers)
+	}
 
 	// 4. Handle Streaming Response
 	if input.Stream {

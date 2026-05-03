@@ -38,11 +38,7 @@ const filteredMapLayers = computed(() => {
       <div class="dialogcontainer-dialog">
         <div class="mobilelayers">
           <!-- Map Layers Dashboard -->
-          <div
-            v-if="
-              contentStore?.currentDashboard?.index?.includes('map-layers')
-            "
-          >
+          <div v-if="contentStore?.isMapLayersDashboard">
             <MobileLayerTab
               v-for="item in contentStore?.currentDashboard
                 .components"
