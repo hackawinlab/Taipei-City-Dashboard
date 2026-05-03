@@ -69,15 +69,14 @@ VALUES
    '{}', '{doit}', NOW(), NOW(), 'two_d', '', 'metrotaipei');
 
 -- 5. 把 youbike-analysis-{taipei,metrotaipei} 兩個 dashboard 的 components 陣列
---    重建成 6 個 id（idempotent，重跑也只會得到同一份結果）。
---    防呆：6 個 component 任何一個缺，subquery 會塞 NULL 進 array，這裡用 WHERE
+--    重建成 5 個 id（idempotent，重跑也只會得到同一份結果）。
+--    防呆：5 個 component 任何一個缺，subquery 會塞 NULL 進 array，這裡用 WHERE
 --    限制只在全部存在時才 update，避免 dashboard 變成包含 NULL 的陣列。
 UPDATE dashboards
 SET components = ARRAY[
   (SELECT id FROM components WHERE index = 'youbike_timemap'),
   (SELECT id FROM components WHERE index = 'youbike_persistence'),
   (SELECT id FROM components WHERE index = 'youbike_imbalance'),
-  (SELECT id FROM components WHERE index = 'youbike_availability'),
   (SELECT id FROM components WHERE index = 'bike_map'),
   (SELECT id FROM components WHERE index = 'bike_network')
 ]::integer[],
@@ -85,6 +84,6 @@ SET components = ARRAY[
 WHERE index IN ('youbike-analysis-taipei', 'youbike-analysis-metrotaipei')
   AND (
     SELECT COUNT(*) FROM components
-    WHERE index IN ('youbike_timemap','youbike_availability','youbike_persistence',
+    WHERE index IN ('youbike_timemap','youbike_persistence',
                     'youbike_imbalance','bike_map','bike_network')
-  ) = 6;
+  ) = 5;
