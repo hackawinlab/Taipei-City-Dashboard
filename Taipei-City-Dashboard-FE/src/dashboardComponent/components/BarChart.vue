@@ -22,7 +22,7 @@ const emits = defineEmits([
 
 const chartOptions = ref({
 	chart: {
-		offsetY: 15,
+		parentHeightOffset: 0,
 		stacked: true,
 		toolbar: {
 			show: false,
@@ -35,6 +35,10 @@ const chartOptions = ref({
 	},
 	grid: {
 		show: false,
+		padding: {
+			top: -28,
+			bottom: -10,
+		},
 	},
 	legend: {
 		show: false,
