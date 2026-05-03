@@ -6,13 +6,13 @@
 #   1. Creates the hackathon DB (if missing).
 #   2. Seeds dashboardmanager: timemap + shortage blocks (persistence/imbalance) + shortage timeline + "Youbike Analysis" dashboard.
 #   3. Initializes the youbike_snapshots schema and indexes.
-#   4. Loads real CSV snapshots from ${DATA_DIR}/youbike_{Taipei,NewTaipei}/*.csv.
+#   4. Loads real CSV snapshots from ${DATA_DIR}/youbike_{Taipei,NewTaipei}/*.csv
+#      when present, or reuses existing youbike_snapshots rows.
 #   5. Fills missing 15-min slots so the time slider has data at every quarter.
 #
-# Idempotent — safe to re-run after pulling fresh CSVs. Real CSVs are required;
-# for a quick demo, drop a handful of CSVs from the pipeline host into
-# data/youbike_{Taipei,NewTaipei}/ and re-run — the gap-fill step will project
-# whatever you load across all 96 quarter-hour slots.
+# Idempotent — safe to re-run after pulling fresh CSVs. If the DB already has
+# youbike_snapshots rows, the script can also refresh manager seeds and gap-fill
+# without requiring CSV files to be present locally.
 #
 # Usage:
 #   ./scripts/load-ubike-data.sh
@@ -128,24 +128,28 @@ shopt -s nullglob
 csv_files=( "${DATA_DIR}"/youbike_Taipei/*.csv "${DATA_DIR}"/youbike_NewTaipei/*.csv )
 shopt -u nullglob
 
-if [[ ${#csv_files[@]} -eq 0 ]]; then
-    echo "ERROR: no CSVs under ${DATA_DIR}/youbike_{Taipei,NewTaipei}." >&2
-    echo "       Pull real snapshots from the pipeline host, e.g.:" >&2
-    echo "         rsync -ah winlab@192.168.10.71:hackathon-pipeline/data/youbike_Taipei    data/" >&2
-    echo "         rsync -ah winlab@192.168.10.71:hackathon-pipeline/data/youbike_NewTaipei data/" >&2
-    echo "       For a quick demo, copy any few CSVs into those subdirs — gap-fill will" >&2
-    echo "       project them across all 96 quarter-hour slots." >&2
-    exit 1
-fi
-
-echo "==> [4/5] Loading ${#csv_files[@]} CSV files from ${DATA_DIR}"
 rows_before="$(psql_db "${HACKATHON_DB}" -tA -c 'SELECT COUNT(*) FROM youbike_snapshots;')"
-for csv in "${csv_files[@]}"; do
-    load_one_csv "${csv}"
-    printf '      %s\n' "$(basename "${csv}")"
-done
-rows_after="$(psql_db "${HACKATHON_DB}" -tA -c 'SELECT COUNT(*) FROM youbike_snapshots;')"
-echo "    Inserted $((rows_after - rows_before)) new rows (existing rows: ${rows_before})."
+if [[ ${#csv_files[@]} -eq 0 ]]; then
+    if [[ "${rows_before}" -eq 0 ]]; then
+        echo "ERROR: no CSVs under ${DATA_DIR}/youbike_{Taipei,NewTaipei}, and ${HACKATHON_DB}.youbike_snapshots is empty." >&2
+        echo "       Pull real snapshots from the pipeline host, e.g.:" >&2
+        echo "         rsync -ah winlab@192.168.10.71:hackathon-pipeline/data/youbike_Taipei    data/" >&2
+        echo "         rsync -ah winlab@192.168.10.71:hackathon-pipeline/data/youbike_NewTaipei data/" >&2
+        echo "       For a quick demo, copy any few CSVs into those subdirs — gap-fill will" >&2
+        echo "       project them across all 96 quarter-hour slots." >&2
+        exit 1
+    fi
+
+    echo "==> [4/5] No CSVs under ${DATA_DIR}; reusing ${rows_before} existing youbike_snapshots rows"
+else
+    echo "==> [4/5] Loading ${#csv_files[@]} CSV files from ${DATA_DIR}"
+    for csv in "${csv_files[@]}"; do
+        load_one_csv "${csv}"
+        printf '      %s\n' "$(basename "${csv}")"
+    done
+    rows_after="$(psql_db "${HACKATHON_DB}" -tA -c 'SELECT COUNT(*) FROM youbike_snapshots;')"
+    echo "    Inserted $((rows_after - rows_before)) new rows (existing rows: ${rows_before})."
+fi
 
 # ---------- 5. Fill missing 15-min slots ----------
 echo "==> [5/5] Filling missing (city × hour × quarter) slots so every slider tick has data"
