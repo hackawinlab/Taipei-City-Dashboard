@@ -28,6 +28,16 @@ INSERT INTO public.components (index, name)
 VALUES ('bus_congestion_layer', '公車 ETA 壅塞偵測')
 ON CONFLICT (index) DO NOTHING;
 
+-- 2b. Component chart 設定（MapLegend 圖例）
+INSERT INTO public.component_charts (index, color, types, unit)
+VALUES (
+  'bus_congestion_layer',
+  '{"#34A853","#FBBC04","#EA8600","#EA4335","#8B0000","#9CA3AF"}',
+  ARRAY['MapLegend'],
+  '路段'
+)
+ON CONFLICT (index) DO NOTHING;
+
 -- 3. query_charts 設定（地圖圖例 + 關聯圖層）
 -- 注意：若 bus_congestion_layer 已存在，只更新 map_config_ids
 DO $$
@@ -39,23 +49,23 @@ BEGIN
   SELECT id INTO abs_id   FROM public.component_maps WHERE index = 'bus_congestion_abs'   LIMIT 1;
   SELECT id INTO delta_id FROM public.component_maps WHERE index = 'bus_congestion_delta' LIMIT 1;
 
-  IF EXISTS (SELECT 1 FROM public.query_charts WHERE index = 'bus_congestion_layer') THEN
-    UPDATE public.query_charts
-    SET map_config_ids = ARRAY[abs_id, delta_id],
-        updated_at = now()
-    WHERE index = 'bus_congestion_layer';
-  ELSE
-    INSERT INTO public.query_charts
-      (index, query_type, query_chart, map_config_ids, created_at, updated_at)
-    VALUES (
-      'bus_congestion_layer',
-      'map_legend',
+  -- taipei 和 metrotaipei 各一筆，ON CONFLICT 更新 map_config_ids
+  INSERT INTO public.query_charts
+    (index, city, query_type, query_chart, map_config_ids, created_at, updated_at)
+  VALUES
+    (
+      'bus_congestion_layer', 'taipei', 'map_legend',
       $sql$SELECT unnest(array['暢通(≤0s)','輕微(+1~30s)','中度(+31~60s)','嚴重(+61~120s)','極嚴重(>120s)','無資料']) as name, 'line' as type$sql$,
-      ARRAY[abs_id, delta_id],
-      comp_created_at,
-      comp_created_at
-    );
-  END IF;
+      ARRAY[abs_id, delta_id], comp_created_at, comp_created_at
+    ),
+    (
+      'bus_congestion_layer', 'metrotaipei', 'map_legend',
+      $sql$SELECT unnest(array['暢通(≤0s)','輕微(+1~30s)','中度(+31~60s)','嚴重(+61~120s)','極嚴重(>120s)','無資料']) as name, 'line' as type$sql$,
+      ARRAY[abs_id, delta_id], comp_created_at, comp_created_at
+    )
+  ON CONFLICT (index, city) DO UPDATE
+    SET map_config_ids = EXCLUDED.map_config_ids,
+        updated_at     = now();
 END $$;
 
 -- 4. 加入智慧通勤 dashboard
@@ -79,9 +89,10 @@ ON CONFLICT (index) DO UPDATE
   ),
   updated_at = now();
 
--- 5. 加入 group（台北市 group_id=2）
+-- 5. 加入 group（台北市 group_id=2，新北市 group_id=3）
 INSERT INTO public.dashboard_groups (dashboard_id, group_id)
-SELECT id, 2
-FROM public.dashboards
-WHERE index = 'smart_commute_taipei'
+SELECT d.id, g.id
+FROM public.dashboards d
+CROSS JOIN (VALUES (2), (3)) AS g(id)
+WHERE d.index = 'smart_commute_taipei'
 ON CONFLICT DO NOTHING;
